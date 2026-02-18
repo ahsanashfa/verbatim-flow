@@ -11,6 +11,8 @@ swift run verbatim-flow --mode raw --hotkey ctrl+shift+space
 The app runs as a menu bar item (`VF`). Use the menu to:
 - Pause/resume hotkey listener
 - Switch `Raw` and `Format-only` modes
+- Trigger microphone/speech permission request
+- Change hotkey presets in-app
 - Open Accessibility and Microphone permission pages
 
 ## Build and test

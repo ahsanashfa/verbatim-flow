@@ -10,11 +10,10 @@ enum RuntimeState: Equatable {
 @MainActor
 final class AppController {
     let localeIdentifier: String
-    let hotkeyDisplay: String
 
     private let transcriber: SpeechTranscriber
     private let injector = TextInjector()
-    private let hotkey: Hotkey
+    private var hotkey: Hotkey
     private let dryRun: Bool
 
     private var mode: OutputMode
@@ -31,7 +30,6 @@ final class AppController {
 
     init(config: CLIConfig) {
         self.localeIdentifier = config.localeIdentifier
-        self.hotkeyDisplay = config.hotkey.display
         self.hotkey = config.hotkey
         self.mode = config.mode
         self.dryRun = config.dryRun
@@ -45,6 +43,10 @@ final class AppController {
         mode
     }
 
+    var currentHotkeyDisplay: String {
+        hotkey.display
+    }
+
     var isRunning: Bool {
         hotkeyMonitor != nil
     }
@@ -55,7 +57,7 @@ final class AppController {
         }
 
         emit("verbatim-flow")
-        emit("mode=\(mode.rawValue) locale=\(localeIdentifier) hotkey=\(hotkeyDisplay)")
+        emit("mode=\(mode.rawValue) locale=\(localeIdentifier) hotkey=\(hotkey.display)")
         emit("release hotkey to transcribe and insert")
 
         let trusted = injector.promptAccessibilityIfNeeded()
@@ -80,10 +82,45 @@ final class AppController {
 
         hotkeyMonitor?.start()
         runtimeState = .ready
-        emit("[ready] Waiting for hotkey: \(hotkeyDisplay)")
+        emit("[ready] Waiting for hotkey: \(hotkey.display)")
     }
 
     func stop() {
+        stopInternal(emitLog: true)
+    }
+
+    func requestSpeechAndMicrophonePermissions() {
+        Task { @MainActor in
+            let granted = await transcriber.ensurePermissions()
+            if granted {
+                emit("[permissions] Speech + microphone granted")
+            } else {
+                emit("[permissions] Speech or microphone denied")
+            }
+        }
+    }
+
+    func setHotkey(_ hotkey: Hotkey) {
+        let sameHotkey = self.hotkey.keyCode == hotkey.keyCode &&
+            self.hotkey.modifiers == hotkey.modifiers
+        guard !sameHotkey else {
+            return
+        }
+
+        let wasRunning = isRunning
+        if wasRunning {
+            stopInternal(emitLog: false)
+        }
+
+        self.hotkey = hotkey
+        emit("[config] hotkey set to \(hotkey.display)")
+
+        if wasRunning {
+            start()
+        }
+    }
+
+    private func stopInternal(emitLog: Bool) {
         hotkeyMonitor = nil
 
         if isRecording {
@@ -94,7 +131,9 @@ final class AppController {
         }
 
         runtimeState = .stopped
-        emit("[stopped] Hotkey listener paused")
+        if emitLog {
+            emit("[stopped] Hotkey listener paused")
+        }
     }
 
     func setMode(_ mode: OutputMode) {

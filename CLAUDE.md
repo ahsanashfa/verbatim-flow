@@ -39,6 +39,10 @@ Build a controllable dictation stack that can rival tools like Typeless/Wispr in
 **Decision**: Build a standalone app bundle via `scripts/build-native-app.sh` from the Swift package release binary.
 **Reason**: Enables double-click launch and sharing without requiring terminal `swift run`.
 
+### [Permission request + hotkey presets in menu bar] (2026-02-18)
+**Decision**: Add in-app menu actions for requesting speech/microphone permission and switching hotkey presets at runtime.
+**Reason**: macOS microphone permissions cannot always be manually inserted before first request, and hotkey changes should not require relaunch with CLI flags.
+
 ## Next implementation target
 - Implement a minimal vertical slice:
   - push-to-talk hotkey

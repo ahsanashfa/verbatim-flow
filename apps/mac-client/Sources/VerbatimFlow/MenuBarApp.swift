@@ -29,7 +29,29 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     )
 
     private let hotkeyInfoItem: NSMenuItem
+    private let hotkeyMenuItem = NSMenuItem(title: "Hotkey", action: nil, keyEquivalent: "")
+    private lazy var hotkeyCtrlShiftSpaceItem = NSMenuItem(
+        title: "Ctrl+Shift+Space",
+        action: #selector(setHotkeyCtrlShiftSpace),
+        keyEquivalent: ""
+    )
+    private lazy var hotkeyShiftOptionSpaceItem = NSMenuItem(
+        title: "Shift+Option+Space",
+        action: #selector(setHotkeyShiftOptionSpace),
+        keyEquivalent: ""
+    )
+    private lazy var hotkeyCmdShiftSpaceItem = NSMenuItem(
+        title: "Cmd+Shift+Space",
+        action: #selector(setHotkeyCmdShiftSpace),
+        keyEquivalent: ""
+    )
+
     private let lastEventItem = NSMenuItem(title: "Last event: -", action: nil, keyEquivalent: "")
+    private lazy var requestPermissionsItem = NSMenuItem(
+        title: "Request Mic/Speech Permission",
+        action: #selector(requestPermissions),
+        keyEquivalent: ""
+    )
 
     private lazy var openAccessibilityItem = NSMenuItem(
         title: "Open Accessibility Settings",
@@ -40,6 +62,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     private lazy var openMicItem = NSMenuItem(
         title: "Open Microphone Settings",
         action: #selector(openMicrophoneSettings),
+        keyEquivalent: ""
+    )
+
+    private lazy var openInputMonitoringItem = NSMenuItem(
+        title: "Open Input Monitoring Settings",
+        action: #selector(openInputMonitoringSettings),
         keyEquivalent: ""
     )
 
@@ -62,6 +90,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
         controller.start()
         refreshModeChecks()
+        refreshHotkeyChecks()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -90,8 +119,20 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         modeSubmenu.addItem(formatOnlyModeItem)
         modeMenuItem.submenu = modeSubmenu
 
+        hotkeyCtrlShiftSpaceItem.target = self
+        hotkeyShiftOptionSpaceItem.target = self
+        hotkeyCmdShiftSpaceItem.target = self
+
+        let hotkeySubmenu = NSMenu(title: "Hotkey")
+        hotkeySubmenu.addItem(hotkeyCtrlShiftSpaceItem)
+        hotkeySubmenu.addItem(hotkeyShiftOptionSpaceItem)
+        hotkeySubmenu.addItem(hotkeyCmdShiftSpaceItem)
+        hotkeyMenuItem.submenu = hotkeySubmenu
+
+        requestPermissionsItem.target = self
         openAccessibilityItem.target = self
         openMicItem.target = self
+        openInputMonitoringItem.target = self
 
         quitItem.target = self
 
@@ -100,9 +141,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(toggleMenuItem)
         menu.addItem(modeMenuItem)
+        menu.addItem(hotkeyMenuItem)
         menu.addItem(hotkeyInfoItem)
         menu.addItem(NSMenuItem.separator())
+        menu.addItem(requestPermissionsItem)
         menu.addItem(openAccessibilityItem)
+        menu.addItem(openInputMonitoringItem)
         menu.addItem(openMicItem)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(quitItem)
@@ -140,6 +184,14 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         formatOnlyModeItem.state = controller.currentMode == .formatOnly ? .on : .off
     }
 
+    private func refreshHotkeyChecks() {
+        let display = controller.currentHotkeyDisplay.lowercased()
+        hotkeyInfoItem.title = "Hotkey: \(controller.currentHotkeyDisplay)"
+        hotkeyCtrlShiftSpaceItem.state = display == "ctrl+shift+space" ? .on : .off
+        hotkeyShiftOptionSpaceItem.state = display == "shift+option+space" ? .on : .off
+        hotkeyCmdShiftSpaceItem.state = display == "cmd+shift+space" ? .on : .off
+    }
+
     @objc
     private func toggleRunning() {
         if controller.isRunning {
@@ -162,8 +214,43 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     }
 
     @objc
+    private func setHotkeyCtrlShiftSpace() {
+        setHotkeyCombo("ctrl+shift+space")
+    }
+
+    @objc
+    private func setHotkeyShiftOptionSpace() {
+        setHotkeyCombo("shift+option+space")
+    }
+
+    @objc
+    private func setHotkeyCmdShiftSpace() {
+        setHotkeyCombo("cmd+shift+space")
+    }
+
+    private func setHotkeyCombo(_ combo: String) {
+        do {
+            let parsed = try HotkeyParser.parse(combo: combo)
+            controller.setHotkey(parsed)
+            refreshHotkeyChecks()
+        } catch {
+            lastEventItem.title = "Last event: [error] invalid hotkey \(combo)"
+        }
+    }
+
+    @objc
+    private func requestPermissions() {
+        controller.requestSpeechAndMicrophonePermissions()
+    }
+
+    @objc
     private func openAccessibilitySettings() {
         openSystemSettings(url: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    }
+
+    @objc
+    private func openInputMonitoringSettings() {
+        openSystemSettings(url: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
     }
 
     @objc
