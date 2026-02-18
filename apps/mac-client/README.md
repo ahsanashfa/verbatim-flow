@@ -19,6 +19,13 @@ swift build
 swift test
 ```
 
+## Build app bundle
+```bash
+cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
+./scripts/build-native-app.sh
+open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/dist/VerbatimFlow.app"
+```
+
 ## Flags
 - `--mode raw|format-only`
 - `--hotkey ctrl+shift+space` (supports aliases like `shift+option+space`, `shift+alt+space`)

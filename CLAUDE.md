@@ -35,6 +35,10 @@ Build a controllable dictation stack that can rival tools like Typeless/Wispr in
 **Decision**: Native app now runs as a menu bar utility (`VF`) with pause/resume, mode switching, and permission shortcuts.
 **Reason**: This provides a practical native control surface without blocking on full GUI settings windows.
 
+### [Native .app bundle build path] (2026-02-18)
+**Decision**: Build a standalone app bundle via `scripts/build-native-app.sh` from the Swift package release binary.
+**Reason**: Enables double-click launch and sharing without requiring terminal `swift run`.
+
 ## Next implementation target
 - Implement a minimal vertical slice:
   - push-to-talk hotkey

@@ -41,3 +41,10 @@ Native app launches as a menu bar item (`VF`) with controls for:
 - pause/resume hotkey listener
 - switching `Raw` / `Format-only` mode
 - opening permission settings
+
+Build double-clickable app bundle:
+```bash
+cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
+./scripts/build-native-app.sh
+open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/dist/VerbatimFlow.app"
+```
