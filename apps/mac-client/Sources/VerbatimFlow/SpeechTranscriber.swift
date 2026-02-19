@@ -23,8 +23,8 @@ final class SpeechTranscriber {
     }
 
     func ensurePermissions() async -> Bool {
-        let speechAuthorized = await resolveSpeechAuthorization()
         let micAuthorized = await resolveMicrophoneAuthorization()
+        let speechAuthorized = await resolveSpeechAuthorization()
         return speechAuthorized && micAuthorized
     }
 
@@ -121,7 +121,12 @@ final class SpeechTranscriber {
             case .denied:
                 return false
             case .undetermined:
-                return await requestMicrophoneAuthorization()
+                let granted = await requestMicrophoneAuthorization()
+                if granted {
+                    return true
+                }
+                await attemptMicrophoneWarmup()
+                return AVAudioApplication.shared.recordPermission == .granted
             @unknown default:
                 return false
             }
@@ -133,7 +138,12 @@ final class SpeechTranscriber {
         case .denied, .restricted:
             return false
         case .notDetermined:
-            return await requestMicrophoneAuthorization()
+            let granted = await requestMicrophoneAuthorization()
+            if granted {
+                return true
+            }
+            await attemptMicrophoneWarmup()
+            return AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
         @unknown default:
             return false
         }
@@ -187,16 +197,29 @@ final class SpeechTranscriber {
                 DispatchQueue.main.asyncAfter(deadline: .now() + permissionRequestTimeout) {
                     finish(AVAudioApplication.shared.recordPermission == .granted)
                 }
-                return
-            }
+            } else {
+                AVCaptureDevice.requestAccess(for: .audio) { granted in
+                    finish(granted)
+                }
 
-            AVCaptureDevice.requestAccess(for: .audio) { granted in
-                finish(granted)
-            }
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + permissionRequestTimeout) {
-                finish(AVCaptureDevice.authorizationStatus(for: .audio) == .authorized)
+                DispatchQueue.main.asyncAfter(deadline: .now() + permissionRequestTimeout) {
+                    finish(AVCaptureDevice.authorizationStatus(for: .audio) == .authorized)
+                }
             }
         }
+    }
+
+    private func attemptMicrophoneWarmup() async {
+        let engine = AVAudioEngine()
+        let inputNode = engine.inputNode
+        let format = inputNode.outputFormat(forBus: 0)
+        inputNode.removeTap(onBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 256, format: format) { _, _ in }
+
+        engine.prepare()
+        _ = try? engine.start()
+        try? await Task.sleep(nanoseconds: 250_000_000)
+        engine.stop()
+        inputNode.removeTap(onBus: 0)
     }
 }

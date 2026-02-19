@@ -112,6 +112,9 @@ final class AppController {
                 emit("[permissions] Accessibility not granted yet")
             }
 
+            let before = currentPermissionSnapshot()
+            emit("[permissions] before: \(before.summaryLine)")
+
             _ = await transcriber.ensurePermissions()
             let snapshot = currentPermissionSnapshot()
             emit("[permissions] \(snapshot.summaryLine)")
