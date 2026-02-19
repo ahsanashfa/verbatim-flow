@@ -54,6 +54,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         action: #selector(setEngineWhisper),
         keyEquivalent: ""
     )
+    private lazy var engineOpenAIItem = NSMenuItem(
+        title: "OpenAI Cloud",
+        action: #selector(setEngineOpenAI),
+        keyEquivalent: ""
+    )
 
     private let whisperModelMenuItem = NSMenuItem(title: "Whisper Model", action: nil, keyEquivalent: "")
     private lazy var whisperModelTinyItem = NSMenuItem(
@@ -271,9 +276,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
         engineAppleItem.target = self
         engineWhisperItem.target = self
+        engineOpenAIItem.target = self
         let engineSubmenu = NSMenu(title: "Recognition Engine")
         engineSubmenu.addItem(engineAppleItem)
         engineSubmenu.addItem(engineWhisperItem)
+        engineSubmenu.addItem(engineOpenAIItem)
         engineMenuItem.submenu = engineSubmenu
 
         whisperModelSmallItem.target = self
@@ -411,6 +418,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
         engineAppleItem.state = currentEngine == .apple ? .on : .off
         engineWhisperItem.state = currentEngine == .whisper ? .on : .off
+        engineOpenAIItem.state = currentEngine == .openai ? .on : .off
 
         whisperModelSmallItem.state = currentWhisperModel == .small ? .on : .off
         whisperModelTinyItem.state = currentWhisperModel == .tiny ? .on : .off
@@ -545,6 +553,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     @objc
     private func setEngineWhisper() {
         setRecognitionEngine(.whisper)
+    }
+
+    @objc
+    private func setEngineOpenAI() {
+        setRecognitionEngine(.openai)
     }
 
     private func setRecognitionEngine(_ engine: RecognitionEngine) {

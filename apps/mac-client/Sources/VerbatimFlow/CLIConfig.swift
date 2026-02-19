@@ -10,6 +10,7 @@ enum OutputMode: String {
 enum RecognitionEngine: String {
     case apple
     case whisper
+    case openai
 
     var displayName: String {
         switch self {
@@ -17,6 +18,8 @@ enum RecognitionEngine: String {
             return "Apple Speech"
         case .whisper:
             return "Whisper"
+        case .openai:
+            return "OpenAI Cloud"
         }
     }
 }
@@ -103,7 +106,7 @@ struct CLIConfig {
             case "--engine":
                 index += 1
                 guard index < args.count, let engine = RecognitionEngine(rawValue: args[index]) else {
-                    throw ConfigError.invalidValue("--engine", "apple | whisper")
+                    throw ConfigError.invalidValue("--engine", "apple | whisper | openai")
                 }
                 config = CLIConfig(
                     mode: config.mode,
@@ -233,7 +236,7 @@ enum HelpPrinter {
             "verbatim-flow",
             "",
             "Usage:",
-            "  verbatim-flow [--mode raw|format-only|clarify] [--engine apple|whisper] [--whisper-model tiny|base|small|medium|large-v3] [--whisper-compute-type int8|int8_float16|float16|float32] [--locale <id>] [--hotkey ctrl+shift+space|shift+option] [--require-on-device] [--dry-run]",
+            "  verbatim-flow [--mode raw|format-only|clarify] [--engine apple|whisper|openai] [--whisper-model tiny|base|small|medium|large-v3] [--whisper-compute-type int8|int8_float16|float16|float32] [--locale <id>] [--hotkey ctrl+shift+space|shift+option] [--require-on-device] [--dry-run]",
             "",
             "Defaults:",
             "  --mode raw",

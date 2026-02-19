@@ -21,7 +21,7 @@ final class SpeechTranscriber {
     private var stopContinuation: CheckedContinuation<String, Never>?
 
     private var audioRecorder: AVAudioRecorder?
-    private var whisperRecordingURL: URL?
+    private var recordedAudioURL: URL?
 
     init(
         localeIdentifier: String,
@@ -54,7 +54,9 @@ final class SpeechTranscriber {
         case .apple:
             try startAppleSpeechRecording()
         case .whisper:
-            try startWhisperRecording()
+            try startFileRecording()
+        case .openai:
+            try startFileRecording()
         }
     }
 
@@ -64,6 +66,8 @@ final class SpeechTranscriber {
             return await stopAppleSpeechRecording()
         case .whisper:
             return try await stopWhisperRecording()
+        case .openai:
+            return try await stopOpenAIRecording()
         }
     }
 
@@ -144,8 +148,8 @@ final class SpeechTranscriber {
         continuation.resume(returning: latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private func startWhisperRecording() throws {
-        let recordingURL = Self.makeWhisperRecordingURL()
+    private func startFileRecording() throws {
+        let recordingURL = Self.makeRecordedAudioURL()
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
             AVSampleRateKey: 16_000,
@@ -160,11 +164,11 @@ final class SpeechTranscriber {
         }
 
         audioRecorder = recorder
-        whisperRecordingURL = recordingURL
+        recordedAudioURL = recordingURL
     }
 
     private func stopWhisperRecording() async throws -> String {
-        guard let recorder = audioRecorder, let recordingURL = whisperRecordingURL else {
+        guard let recorder = audioRecorder, let recordingURL = recordedAudioURL else {
             return ""
         }
 
@@ -172,7 +176,7 @@ final class SpeechTranscriber {
         recorder.stop()
 
         audioRecorder = nil
-        whisperRecordingURL = nil
+        recordedAudioURL = nil
 
         defer {
             try? FileManager.default.removeItem(at: recordingURL)
@@ -205,7 +209,41 @@ final class SpeechTranscriber {
         return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private nonisolated static func makeWhisperRecordingURL() -> URL {
+    private func stopOpenAIRecording() async throws -> String {
+        guard let recorder = audioRecorder, let recordingURL = recordedAudioURL else {
+            return ""
+        }
+
+        let durationSec = recorder.currentTime
+        recorder.stop()
+
+        audioRecorder = nil
+        recordedAudioURL = nil
+
+        defer {
+            try? FileManager.default.removeItem(at: recordingURL)
+        }
+
+        if durationSec < 0.18 {
+            return ""
+        }
+
+        let languageCode = Self.whisperLanguageCode(from: localeIdentifier)
+        let transcript = try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let text = try Self.transcribeOpenAIAudioFile(audioURL: recordingURL, languageCode: languageCode)
+                    continuation.resume(returning: text)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private nonisolated static func makeRecordedAudioURL() -> URL {
         let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         return tempDirectory
             .appendingPathComponent("verbatim-flow-\(UUID().uuidString)", isDirectory: false)
@@ -262,6 +300,78 @@ final class SpeechTranscriber {
         }
 
         return outputText
+    }
+
+    private nonisolated static func transcribeOpenAIAudioFile(audioURL: URL, languageCode: String?) throws -> String {
+        guard let apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"], !apiKey.isEmpty else {
+            throw AppError.openAIAPIKeyMissing
+        }
+
+        let model = ProcessInfo.processInfo.environment["VERBATIMFLOW_OPENAI_MODEL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedModel = (model?.isEmpty == false ? model! : "gpt-4o-mini-transcribe")
+        let baseURL = ProcessInfo.processInfo.environment["VERBATIMFLOW_OPENAI_BASE_URL"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedBaseURL = (baseURL?.isEmpty == false ? baseURL! : "https://api.openai.com/v1")
+        let endpoint = resolvedBaseURL.hasSuffix("/") ? "\(resolvedBaseURL)audio/transcriptions" : "\(resolvedBaseURL)/audio/transcriptions"
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+
+        var arguments: [String] = [
+            "-sS",
+            "-X", "POST",
+            endpoint,
+            "-H", "Authorization: Bearer \(apiKey)",
+            "-F", "file=@\(audioURL.path)",
+            "-F", "model=\(resolvedModel)",
+            "-F", "response_format=json"
+        ]
+
+        if let languageCode, !languageCode.isEmpty {
+            arguments.append(contentsOf: ["-F", "language=\(languageCode)"])
+        }
+
+        process.arguments = arguments
+
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let errorText = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if process.terminationStatus != 0 {
+            let details = errorText.isEmpty
+                ? (String(data: outputData, encoding: .utf8) ?? "")
+                : errorText
+            throw AppError.openAITranscriptionFailed(details)
+        }
+
+        guard
+            let payload = try? JSONSerialization.jsonObject(with: outputData, options: []) as? [String: Any]
+        else {
+            let raw = String(data: outputData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if raw.isEmpty {
+                throw AppError.openAITranscriptionFailed("Empty response")
+            }
+            throw AppError.openAITranscriptionFailed("Unexpected response: \(raw)")
+        }
+
+        if let text = payload["text"] as? String {
+            return text
+        }
+
+        if let errorPayload = payload["error"] as? [String: Any],
+           let message = errorPayload["message"] as? String,
+           !message.isEmpty {
+            throw AppError.openAITranscriptionFailed(message)
+        }
+
+        throw AppError.openAITranscriptionFailed("Response has no text field")
     }
 
     private nonisolated static func resolveWhisperScriptURL() -> URL? {

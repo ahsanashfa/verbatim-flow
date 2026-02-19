@@ -7,6 +7,8 @@ enum AppError: Error, CustomStringConvertible {
     case whisperScriptNotFound
     case pythonRuntimeNotFound
     case whisperTranscriptionFailed(String)
+    case openAIAPIKeyMissing
+    case openAITranscriptionFailed(String)
     case eventSourceCreationFailed
     case eventCreationFailed
     case accessibilityPermissionRequired
@@ -28,6 +30,13 @@ enum AppError: Error, CustomStringConvertible {
                 return "Whisper transcription failed"
             }
             return "Whisper transcription failed: \(details)"
+        case .openAIAPIKeyMissing:
+            return "OPENAI_API_KEY is missing. Set it before using OpenAI Cloud engine."
+        case .openAITranscriptionFailed(let details):
+            if details.isEmpty {
+                return "OpenAI Cloud transcription failed"
+            }
+            return "OpenAI Cloud transcription failed: \(details)"
         case .eventSourceCreationFailed:
             return "Failed to create event source"
         case .eventCreationFailed:

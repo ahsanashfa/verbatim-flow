@@ -41,7 +41,7 @@ cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-fl
 Native app launches as a menu bar item (`VF`) with controls for:
 - pause/resume hotkey listener
 - switching `Raw` / `Format-only` / `Clarify` mode
-- switching recognition engine (`Apple Speech` / `Whisper`)
+- switching recognition engine (`Apple Speech` / `Whisper` / `OpenAI Cloud`)
 - switching Whisper model (`tiny` / `base` / `small` / `medium` / `large-v3`)
 - switching language (`System Default` / `zh-Hans` / `en-US`)
 - requesting microphone/speech permission

@@ -150,6 +150,7 @@ final class AppController {
         RuntimeLogger.log("[permissions] controller request invoked")
         emit("[permissions] requesting access...")
         let accessibilityTrusted = injector.isAccessibilityTrusted()
+        let requiresSpeechPermission = recognitionEngine == .apple
         if !accessibilityTrusted {
             emit("[permissions] Accessibility not granted yet")
         }
@@ -165,7 +166,7 @@ final class AppController {
 
             RuntimeLogger.log("[permissions] background request started")
             let micGranted = Self.requestMicrophoneAuthorization(timeout: 6)
-            let speechGranted = Self.requestSpeechAuthorization(timeout: 6)
+            let speechGranted = requiresSpeechPermission ? Self.requestSpeechAuthorization(timeout: 6) : true
             RuntimeLogger.log("[permissions] background request finished micGranted=\(micGranted) speechGranted=\(speechGranted)")
 
             DispatchQueue.main.async { [weak self] in
