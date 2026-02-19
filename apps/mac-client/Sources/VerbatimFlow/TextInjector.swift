@@ -7,6 +7,10 @@ import Foundation
 final class TextInjector {
     private var restoreClipboardWorkItem: DispatchWorkItem?
 
+    func isAccessibilityTrusted() -> Bool {
+        AXIsProcessTrusted()
+    }
+
     func promptAccessibilityIfNeeded() -> Bool {
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         let options = [key: true] as CFDictionary

@@ -105,20 +105,33 @@ final class AppController {
     }
 
     func requestSpeechAndMicrophonePermissions() {
-        Task { @MainActor in
-            emit("[permissions] requesting access...")
-            let accessibilityTrusted = injector.promptAccessibilityIfNeeded()
-            if !accessibilityTrusted {
-                emit("[permissions] Accessibility not granted yet")
+        RuntimeLogger.log("[permissions] controller request invoked")
+        emit("[permissions] requesting access...")
+        let accessibilityTrusted = injector.isAccessibilityTrusted()
+        if !accessibilityTrusted {
+            emit("[permissions] Accessibility not granted yet")
+        }
+
+        let before = currentPermissionSnapshot()
+        emit("[permissions] before: \(before.summaryLine)")
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else {
+                RuntimeLogger.log("[permissions] background request dropped: self released")
+                return
             }
 
-            let before = currentPermissionSnapshot()
-            emit("[permissions] before: \(before.summaryLine)")
+            RuntimeLogger.log("[permissions] background request started")
+            let micGranted = Self.requestMicrophoneAuthorization(timeout: 6)
+            let speechGranted = Self.requestSpeechAuthorization(timeout: 6)
+            RuntimeLogger.log("[permissions] background request finished micGranted=\(micGranted) speechGranted=\(speechGranted)")
 
-            _ = await transcriber.ensurePermissions()
-            let snapshot = currentPermissionSnapshot()
-            emit("[permissions] \(snapshot.summaryLine)")
-            onPermissionSnapshot?(snapshot)
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                let snapshot = self.currentPermissionSnapshot()
+                self.emit("[permissions] \(snapshot.summaryLine)")
+                self.onPermissionSnapshot?(snapshot)
+            }
         }
     }
 
@@ -343,6 +356,94 @@ final class AppController {
             return .authorized
         @unknown default:
             return .unsupported
+        }
+    }
+
+    private nonisolated static func requestSpeechAuthorization(timeout: TimeInterval) -> Bool {
+        let current = SFSpeechRecognizer.authorizationStatus()
+        switch current {
+        case .authorized:
+            return true
+        case .denied, .restricted:
+            return false
+        case .notDetermined:
+            let semaphore = DispatchSemaphore(value: 0)
+            var status: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+            SFSpeechRecognizer.requestAuthorization { newStatus in
+                status = newStatus
+                RuntimeLogger.log("[permissions] speech callback status=\(newStatus.rawValue)")
+                semaphore.signal()
+            }
+
+            let waitResult = semaphore.wait(timeout: .now() + timeout)
+            if waitResult == .timedOut {
+                RuntimeLogger.log("[permissions] speech callback timed out after \(Int(timeout))s")
+            }
+
+            let finalStatus: SFSpeechRecognizerAuthorizationStatus
+            if status == .notDetermined {
+                finalStatus = SFSpeechRecognizer.authorizationStatus()
+            } else {
+                finalStatus = status
+            }
+            RuntimeLogger.log("[permissions] speech final status=\(finalStatus.rawValue)")
+            return finalStatus == .authorized
+        @unknown default:
+            return false
+        }
+    }
+
+    private nonisolated static func requestMicrophoneAuthorization(timeout: TimeInterval) -> Bool {
+        if #available(macOS 14.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                return true
+            case .denied:
+                return false
+            case .undetermined:
+                let semaphore = DispatchSemaphore(value: 0)
+                var callbackGranted = false
+                AVAudioApplication.requestRecordPermission { granted in
+                    callbackGranted = granted
+                    RuntimeLogger.log("[permissions] microphone callback granted=\(granted)")
+                    semaphore.signal()
+                }
+
+                let waitResult = semaphore.wait(timeout: .now() + timeout)
+                if waitResult == .timedOut {
+                    RuntimeLogger.log("[permissions] microphone callback timed out after \(Int(timeout))s")
+                }
+                let finalGranted = callbackGranted || AVAudioApplication.shared.recordPermission == .granted
+                RuntimeLogger.log("[permissions] microphone final status=\(AVAudioApplication.shared.recordPermission.rawValue)")
+                return finalGranted
+            @unknown default:
+                return false
+            }
+        }
+
+        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        case .authorized:
+            return true
+        case .denied, .restricted:
+            return false
+        case .notDetermined:
+            let semaphore = DispatchSemaphore(value: 0)
+            var callbackGranted = false
+            AVCaptureDevice.requestAccess(for: .audio) { granted in
+                callbackGranted = granted
+                RuntimeLogger.log("[permissions] microphone callback granted=\(granted)")
+                semaphore.signal()
+            }
+
+            let waitResult = semaphore.wait(timeout: .now() + timeout)
+            if waitResult == .timedOut {
+                RuntimeLogger.log("[permissions] microphone callback timed out after \(Int(timeout))s")
+            }
+            let finalGranted = callbackGranted || AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+            RuntimeLogger.log("[permissions] microphone final status=\(AVCaptureDevice.authorizationStatus(for: .audio).rawValue)")
+            return finalGranted
+        @unknown default:
+            return false
         }
     }
 }

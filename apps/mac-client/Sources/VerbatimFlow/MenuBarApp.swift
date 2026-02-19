@@ -492,17 +492,24 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
     @objc
     private func requestPermissions() {
+        RuntimeLogger.log("[permissions] menu click request initiated")
+        RuntimeLogger.log("[permissions] activationPolicy=\(activationPolicyDescription(NSApp.activationPolicy()))")
         permissionRequestFallbackWorkItem?.cancel()
+        RuntimeLogger.log("[permissions] menu before elevateForPermissionPromptIfNeeded")
         elevateForPermissionPromptIfNeeded()
+        RuntimeLogger.log("[permissions] menu after elevateForPermissionPromptIfNeeded")
         lastEventItem.title = "Last event: [permissions] request initiated"
         permissionStatusItem.title = "Permissions: Requesting..."
         refreshPermissionStatus(controller.currentPermissionSnapshot())
         shouldShowPermissionAlertOnNextSnapshot = true
+        RuntimeLogger.log("[permissions] menu calling controller.requestSpeechAndMicrophonePermissions")
         controller.requestSpeechAndMicrophonePermissions()
+        RuntimeLogger.log("[permissions] menu returned from controller.requestSpeechAndMicrophonePermissions")
 
         let fallback = DispatchWorkItem { [weak self] in
             guard let self else { return }
             guard self.shouldShowPermissionAlertOnNextSnapshot else { return }
+            RuntimeLogger.log("[permissions] menu fallback fired")
             self.shouldShowPermissionAlertOnNextSnapshot = false
             let snapshot = self.controller.currentPermissionSnapshot()
             self.refreshPermissionStatus(snapshot)
@@ -571,6 +578,19 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         }
         shouldRestoreAccessoryAfterPermissionRequest = false
         _ = NSApp.setActivationPolicy(.accessory)
+    }
+
+    private func activationPolicyDescription(_ policy: NSApplication.ActivationPolicy) -> String {
+        switch policy {
+        case .regular:
+            return "regular"
+        case .accessory:
+            return "accessory"
+        case .prohibited:
+            return "prohibited"
+        @unknown default:
+            return "unknown"
+        }
     }
 
     private func presentPermissionAlert(_ snapshot: PermissionSnapshot) {

@@ -11,3 +11,4 @@ apps/mac-client/python/__pycache__/
 apps/mac-client/python/**/*.pyc
 apps/mac-client/build/
 apps/mac-client/.build/
+tmp/
