@@ -6,6 +6,7 @@ NATIVE_DIR="$ROOT_DIR/apps/mac-client"
 APP_NAME="VerbatimFlow"
 APP_BUNDLE="$NATIVE_DIR/dist/${APP_NAME}.app"
 EXECUTABLE_NAME="$APP_NAME"
+ICON_FILE="$NATIVE_DIR/Resources/AppIcon.icns"
 
 cd "$NATIVE_DIR"
 
@@ -18,6 +19,11 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$NATIVE_DIR/.build/release/verbatim-flow" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 chmod +x "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
+"$ROOT_DIR/scripts/generate-app-icon.sh"
+if [[ -f "$ICON_FILE" ]]; then
+  cp "$ICON_FILE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+fi
+
 cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -29,6 +35,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
   <string>VerbatimFlow</string>
   <key>CFBundleExecutable</key>
   <string>VerbatimFlow</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
   <string>com.axtonliu.verbatimflow</string>
   <key>CFBundleInfoDictionaryVersion</key>
