@@ -17,6 +17,8 @@
   - 2026-02-19 follow-up: forcing `Cmd+V` for Codex introduced a hard regression for some users.
   - Final policy changed to `AX first -> Cmd+V fallback` for all non-terminal apps.
   - Keep app-specific hardcoded insertion overrides disabled unless reproducible evidence exists.
+  - 2026-02-19 second follow-up: Codex still had intermittent "AX success but no visible insertion".
+  - Codex insertion path changed to Unicode event typing (same class as terminal path), bypassing AX/paste for Codex only.
 
 ## 2026-02-19: Cloud endpoint transport guard
 

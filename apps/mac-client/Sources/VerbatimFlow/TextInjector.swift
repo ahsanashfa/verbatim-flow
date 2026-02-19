@@ -46,9 +46,9 @@ final class TextInjector {
             RuntimeLogger.log("[insert] frontmost application unavailable before insertion")
         }
 
-        if isTerminalLike(frontmost?.bundleIdentifier) {
+        if shouldUseUnicodeTyping(frontmost?.bundleIdentifier) {
             try postUnicodeText(text)
-            RuntimeLogger.log("[insert] via unicode typing (terminal path)")
+            RuntimeLogger.log("[insert] via unicode typing")
             return
         }
 
@@ -209,5 +209,19 @@ final class TextInjector {
         }
 
         return bundleIdentifier == "com.apple.Terminal" || bundleIdentifier == "com.googlecode.iterm2"
+    }
+
+    private func shouldUseUnicodeTyping(_ bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else {
+            return false
+        }
+
+        if isTerminalLike(bundleIdentifier) {
+            return true
+        }
+
+        // Codex chat input can report AX success without visible text mutation.
+        // Unicode event typing is more deterministic there than AX/paste fallback.
+        return bundleIdentifier == "com.openai.codex" || bundleIdentifier.hasPrefix("com.openai.codex.")
     }
 }

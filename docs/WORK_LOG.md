@@ -24,6 +24,7 @@
 - Insertion strategy:
   - Reverted to robust baseline: `AX selected-text first -> Cmd+V fallback`.
   - Avoid app-specific hard override unless reproducible across environments.
+  - For Codex specifically (after repeated evidence of AX false-positive), switch to Unicode event typing path.
 - Hotkey watchdog:
   - Keep event callback flow unchanged.
   - Add dual-source release verification:
@@ -33,6 +34,8 @@
 
 ### Implementation details
 - Restored insertion baseline in:
+  - `apps/mac-client/Sources/VerbatimFlow/TextInjector.swift`
+- Added Codex Unicode typing path in:
   - `apps/mac-client/Sources/VerbatimFlow/TextInjector.swift`
 - Hardened hotkey release watchdog in:
   - `apps/mac-client/Sources/VerbatimFlow/HotkeyMonitor.swift`
