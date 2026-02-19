@@ -64,3 +64,29 @@
 - Any regression fix must be documented the same day in:
   - `docs/REGRESSION_LOG.md`
   - `docs/WORK_LOG.md`
+
+## 2026-02-19 - Next optimization backlog (user-prioritized)
+
+### P1 - Fault tolerance for long dictation
+- Goal:
+  - If transcription fails after a long recording, user must be able to retry without re-speaking.
+- Planned baseline:
+  - Keep the recorded audio file until transcription succeeds or user discards it.
+  - Add "Retry last audio" action (menu command) to re-run transcription with same audio.
+  - Add "Save failed audio" fallback location for manual recovery.
+
+### P1 - Simple voice command layer
+- Goal:
+  - Keep default mode as `raw`, but allow one-shot command such as "整理成书面语" for the current utterance.
+- Planned baseline:
+  - Parse a small command prefix set in recognized text.
+  - Command modifies post-processing mode for the current segment only.
+  - Do not change global mode unless explicitly requested.
+
+### P2 - Readability post-processing
+- Goal:
+  - Improve line breaks and Chinese punctuation quality.
+- Planned baseline:
+  - Optional punctuation normalization (`English comma/period` -> `Chinese punctuation`) when locale is Chinese.
+  - Optional lightweight paragraph split by pause/length heuristics.
+  - Keep disabled by default until quality validated.
