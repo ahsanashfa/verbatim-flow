@@ -56,6 +56,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     )
 
     private let whisperModelMenuItem = NSMenuItem(title: "Whisper Model", action: nil, keyEquivalent: "")
+    private lazy var whisperModelTinyItem = NSMenuItem(
+        title: "tiny",
+        action: #selector(setWhisperModelTiny),
+        keyEquivalent: ""
+    )
+    private lazy var whisperModelBaseItem = NSMenuItem(
+        title: "base",
+        action: #selector(setWhisperModelBase),
+        keyEquivalent: ""
+    )
     private lazy var whisperModelSmallItem = NSMenuItem(
         title: "small",
         action: #selector(setWhisperModelSmall),
@@ -267,9 +277,13 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         engineMenuItem.submenu = engineSubmenu
 
         whisperModelSmallItem.target = self
+        whisperModelTinyItem.target = self
+        whisperModelBaseItem.target = self
         whisperModelMediumItem.target = self
         whisperModelLargeV3Item.target = self
         let whisperModelSubmenu = NSMenu(title: "Whisper Model")
+        whisperModelSubmenu.addItem(whisperModelTinyItem)
+        whisperModelSubmenu.addItem(whisperModelBaseItem)
         whisperModelSubmenu.addItem(whisperModelSmallItem)
         whisperModelSubmenu.addItem(whisperModelMediumItem)
         whisperModelSubmenu.addItem(whisperModelLargeV3Item)
@@ -399,6 +413,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         engineWhisperItem.state = currentEngine == .whisper ? .on : .off
 
         whisperModelSmallItem.state = currentWhisperModel == .small ? .on : .off
+        whisperModelTinyItem.state = currentWhisperModel == .tiny ? .on : .off
+        whisperModelBaseItem.state = currentWhisperModel == .base ? .on : .off
         whisperModelMediumItem.state = currentWhisperModel == .medium ? .on : .off
         whisperModelLargeV3Item.state = currentWhisperModel == .largeV3 ? .on : .off
 
@@ -535,6 +551,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         controller.setRecognitionEngine(engine)
         preferences.saveRecognitionEngine(controller.currentRecognitionEngine)
         refreshEngineChecks()
+    }
+
+    @objc
+    private func setWhisperModelTiny() {
+        setWhisperModel(.tiny)
+    }
+
+    @objc
+    private func setWhisperModelBase() {
+        setWhisperModel(.base)
     }
 
     @objc
