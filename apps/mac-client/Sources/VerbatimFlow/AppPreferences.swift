@@ -7,6 +7,8 @@ final class AppPreferences {
         static let mode = "verbatimflow.mode"
         static let hotkey = "verbatimflow.hotkey"
         static let languageSelection = "verbatimflow.languageSelection"
+        static let recognitionEngine = "verbatimflow.recognitionEngine"
+        static let whisperModel = "verbatimflow.whisperModel"
     }
 
     private let defaults: UserDefaults
@@ -43,5 +45,27 @@ final class AppPreferences {
 
     func saveLanguageSelection(_ value: String) {
         defaults.set(value, forKey: Key.languageSelection)
+    }
+
+    func loadRecognitionEngine() -> RecognitionEngine? {
+        guard let rawValue = defaults.string(forKey: Key.recognitionEngine) else {
+            return nil
+        }
+        return RecognitionEngine(rawValue: rawValue)
+    }
+
+    func saveRecognitionEngine(_ engine: RecognitionEngine) {
+        defaults.set(engine.rawValue, forKey: Key.recognitionEngine)
+    }
+
+    func loadWhisperModel() -> WhisperModel? {
+        guard let rawValue = defaults.string(forKey: Key.whisperModel) else {
+            return nil
+        }
+        return WhisperModel(rawValue: rawValue)
+    }
+
+    func saveWhisperModel(_ model: WhisperModel) {
+        defaults.set(model.rawValue, forKey: Key.whisperModel)
     }
 }

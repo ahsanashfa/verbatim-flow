@@ -32,6 +32,22 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertEqual(preferences.loadLanguageSelection(), AppPreferences.systemLanguageToken)
     }
 
+    func testSaveAndLoadRecognitionEngine() {
+        let defaults = makeIsolatedDefaults()
+        let preferences = AppPreferences(defaults: defaults)
+
+        preferences.saveRecognitionEngine(.whisper)
+        XCTAssertEqual(preferences.loadRecognitionEngine(), .whisper)
+    }
+
+    func testSaveAndLoadWhisperModel() {
+        let defaults = makeIsolatedDefaults()
+        let preferences = AppPreferences(defaults: defaults)
+
+        preferences.saveWhisperModel(.medium)
+        XCTAssertEqual(preferences.loadWhisperModel(), .medium)
+    }
+
     private func makeIsolatedDefaults() -> UserDefaults {
         let suiteName = "verbatimflow.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

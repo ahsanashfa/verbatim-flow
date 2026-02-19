@@ -40,6 +40,8 @@ Comet => Commit
 walk flow => workflow
 work flow => workflow
 偷坑 => token
+B肉 => BROLL
+逼肉 => BROLL
 """
 
     static func ensureDictionaryFileExists() {

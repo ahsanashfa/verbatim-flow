@@ -8,6 +8,9 @@ final class SpeechTranscriber {
 
     private let localeIdentifier: String
     private let requireOnDeviceRecognition: Bool
+    private let recognitionEngine: RecognitionEngine
+    private let whisperModel: WhisperModel
+    private let whisperComputeType: String
 
     private let audioEngine = AVAudioEngine()
     private var recognitionTask: SFSpeechRecognitionTask?
@@ -17,20 +20,54 @@ final class SpeechTranscriber {
     private var latestTranscript: String = ""
     private var stopContinuation: CheckedContinuation<String, Never>?
 
-    init(localeIdentifier: String, requireOnDeviceRecognition: Bool) {
+    private var audioRecorder: AVAudioRecorder?
+    private var whisperRecordingURL: URL?
+
+    init(
+        localeIdentifier: String,
+        requireOnDeviceRecognition: Bool,
+        recognitionEngine: RecognitionEngine,
+        whisperModel: WhisperModel,
+        whisperComputeType: String
+    ) {
         self.localeIdentifier = localeIdentifier
         self.requireOnDeviceRecognition = requireOnDeviceRecognition
+        self.recognitionEngine = recognitionEngine
+        self.whisperModel = whisperModel
+        self.whisperComputeType = whisperComputeType
     }
 
     func ensurePermissions() async -> Bool {
-        RuntimeLogger.log("[permissions] ensure start speech=\(Self.speechStatusDescription(SFSpeechRecognizer.authorizationStatus())) mic=\(Self.microphoneStatusDescription())")
+        RuntimeLogger.log(
+            "[permissions] ensure start engine=\(recognitionEngine.rawValue) speech=\(Self.speechStatusDescription(SFSpeechRecognizer.authorizationStatus())) mic=\(Self.microphoneStatusDescription())"
+        )
         let micAuthorized = await resolveMicrophoneAuthorization()
-        let speechAuthorized = await resolveSpeechAuthorization()
-        RuntimeLogger.log("[permissions] ensure done speechAuthorized=\(speechAuthorized) micAuthorized=\(micAuthorized)")
+        let speechAuthorized = recognitionEngine == .apple ? await resolveSpeechAuthorization() : true
+        RuntimeLogger.log(
+            "[permissions] ensure done engine=\(recognitionEngine.rawValue) speechAuthorized=\(speechAuthorized) micAuthorized=\(micAuthorized)"
+        )
         return speechAuthorized && micAuthorized
     }
 
     func startRecording() throws {
+        switch recognitionEngine {
+        case .apple:
+            try startAppleSpeechRecording()
+        case .whisper:
+            try startWhisperRecording()
+        }
+    }
+
+    func stopRecording() async throws -> String {
+        switch recognitionEngine {
+        case .apple:
+            return await stopAppleSpeechRecording()
+        case .whisper:
+            return try await stopWhisperRecording()
+        }
+    }
+
+    private func startAppleSpeechRecording() throws {
         latestTranscript = ""
         recognitionTask?.cancel()
         recognitionTask = nil
@@ -79,7 +116,7 @@ final class SpeechTranscriber {
         try audioEngine.start()
     }
 
-    func stopRecording() async -> String {
+    private func stopAppleSpeechRecording() async -> String {
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -105,6 +142,174 @@ final class SpeechTranscriber {
         recognitionRequest = nil
 
         continuation.resume(returning: latestTranscript.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    private func startWhisperRecording() throws {
+        let recordingURL = Self.makeWhisperRecordingURL()
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 16_000,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
+        ]
+
+        let recorder = try AVAudioRecorder(url: recordingURL, settings: settings)
+        recorder.isMeteringEnabled = false
+        guard recorder.prepareToRecord(), recorder.record() else {
+            throw AppError.audioRecorderStartFailed
+        }
+
+        audioRecorder = recorder
+        whisperRecordingURL = recordingURL
+    }
+
+    private func stopWhisperRecording() async throws -> String {
+        guard let recorder = audioRecorder, let recordingURL = whisperRecordingURL else {
+            return ""
+        }
+
+        let durationSec = recorder.currentTime
+        recorder.stop()
+
+        audioRecorder = nil
+        whisperRecordingURL = nil
+
+        defer {
+            try? FileManager.default.removeItem(at: recordingURL)
+        }
+
+        if durationSec < 0.18 {
+            return ""
+        }
+
+        let model = whisperModel.rawValue
+        let computeType = whisperComputeType
+        let languageCode = Self.whisperLanguageCode(from: localeIdentifier)
+
+        let transcript = try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let text = try Self.transcribeWhisperAudioFile(
+                        audioURL: recordingURL,
+                        model: model,
+                        computeType: computeType,
+                        languageCode: languageCode
+                    )
+                    continuation.resume(returning: text)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+
+        return transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private nonisolated static func makeWhisperRecordingURL() -> URL {
+        let tempDirectory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        return tempDirectory
+            .appendingPathComponent("verbatim-flow-\(UUID().uuidString)", isDirectory: false)
+            .appendingPathExtension("m4a")
+    }
+
+    private nonisolated static func transcribeWhisperAudioFile(
+        audioURL: URL,
+        model: String,
+        computeType: String,
+        languageCode: String?
+    ) throws -> String {
+        guard let scriptURL = resolveWhisperScriptURL() else {
+            throw AppError.whisperScriptNotFound
+        }
+
+        let process = Process()
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+
+        if let pythonURL = resolvePythonExecutable(scriptURL: scriptURL) {
+            process.executableURL = pythonURL
+            process.arguments = [
+                scriptURL.path,
+                "--audio",
+                audioURL.path,
+                "--model",
+                model,
+                "--compute-type",
+                computeType
+            ]
+        } else {
+            throw AppError.pythonRuntimeNotFound
+        }
+
+        if let languageCode, !languageCode.isEmpty {
+            process.arguments?.append(contentsOf: ["--language", languageCode])
+        }
+
+        process.standardOutput = outputPipe
+        process.standardError = errorPipe
+
+        try process.run()
+        process.waitUntilExit()
+
+        let outputText = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let errorText = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        if process.terminationStatus != 0 {
+            let details = errorText.isEmpty ? outputText : errorText
+            throw AppError.whisperTranscriptionFailed(details)
+        }
+
+        return outputText
+    }
+
+    private nonisolated static func resolveWhisperScriptURL() -> URL? {
+        let fileManager = FileManager.default
+        let currentDirectory = URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
+        let bundleDirectory = Bundle.main.bundleURL.deletingLastPathComponent()
+
+        let candidates = [
+            currentDirectory.appendingPathComponent("python/scripts/transcribe_once.py"),
+            currentDirectory.appendingPathComponent("apps/mac-client/python/scripts/transcribe_once.py"),
+            bundleDirectory.appendingPathComponent("../python/scripts/transcribe_once.py"),
+            bundleDirectory.appendingPathComponent("python/scripts/transcribe_once.py")
+        ].map { $0.standardizedFileURL }
+
+        for candidate in candidates where fileManager.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+
+        return nil
+    }
+
+    private nonisolated static func resolvePythonExecutable(scriptURL: URL) -> URL? {
+        let fileManager = FileManager.default
+        let pythonRoot = scriptURL.deletingLastPathComponent().deletingLastPathComponent()
+        let venvPython = pythonRoot.appendingPathComponent(".venv/bin/python")
+        if fileManager.fileExists(atPath: venvPython.path) {
+            return venvPython
+        }
+
+        let systemPython = URL(fileURLWithPath: "/usr/bin/python3")
+        if fileManager.fileExists(atPath: systemPython.path) {
+            return systemPython
+        }
+
+        return nil
+    }
+
+    private nonisolated static func whisperLanguageCode(from localeIdentifier: String) -> String? {
+        let lowercased = localeIdentifier.lowercased()
+        if lowercased.hasPrefix("zh") {
+            return "zh"
+        }
+        if lowercased.hasPrefix("en") {
+            return "en"
+        }
+
+        let languageCode = Locale(identifier: localeIdentifier).language.languageCode?.identifier
+        return languageCode?.isEmpty == false ? languageCode : nil
     }
 
     private func resolveSpeechAuthorization() async -> Bool {
@@ -183,7 +388,9 @@ final class SpeechTranscriber {
                     finalStatus = status
                 }
 
-                RuntimeLogger.log("[permissions] speech final status=\(Self.speechStatusDescription(finalStatus)) callbackInvoked=\(callbackInvoked)")
+                RuntimeLogger.log(
+                    "[permissions] speech final status=\(Self.speechStatusDescription(finalStatus)) callbackInvoked=\(callbackInvoked)"
+                )
                 continuation.resume(returning: finalStatus == .authorized)
             }
         }
@@ -225,7 +432,9 @@ final class SpeechTranscriber {
                     finalGranted = callbackGranted || (callbackInvoked == false && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized)
                 }
 
-                RuntimeLogger.log("[permissions] microphone final granted=\(finalGranted) callbackInvoked=\(callbackInvoked) status=\(Self.microphoneStatusDescription())")
+                RuntimeLogger.log(
+                    "[permissions] microphone final granted=\(finalGranted) callbackInvoked=\(callbackInvoked) status=\(Self.microphoneStatusDescription())"
+                )
                 continuation.resume(returning: finalGranted)
             }
         }

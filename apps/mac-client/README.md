@@ -10,7 +10,9 @@ swift run verbatim-flow --mode raw --hotkey ctrl+shift+space
 
 The app runs as a menu bar item (`VF`). Use the menu to:
 - Pause/resume hotkey listener
-- Switch `Raw` and `Format-only` modes
+- Switch `Raw`, `Format-only`, and `Clarify` modes
+- Switch recognition engine (`Apple Speech`, `Whisper`)
+- Switch Whisper model (`small`, `medium`, `large-v3`)
 - Switch language (`System Default`, `zh-Hans`, `en-US`)
 - Trigger microphone/speech permission request
 - See permission status summary (`Mic/Speech/Accessibility`)
@@ -30,8 +32,8 @@ Permission request behavior:
 - Permission requests use timeout fallback, so the UI reports status even if macOS callbacks stall.
 
 ### Persistent settings
-`Mode`, `Hotkey`, and `Language` are now persisted with `UserDefaults` and restored on restart.
-CLI flags (`--mode`, `--hotkey`, `--locale`) still override saved values for the current run.
+`Mode`, `Recognition Engine`, `Whisper Model`, `Hotkey`, and `Language` are persisted with `UserDefaults` and restored on restart.
+CLI flags still override saved values for the current run.
 
 ## Build and test
 ```bash
@@ -49,7 +51,10 @@ open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-
 `build-native-app.sh` now applies a fixed ad-hoc signature (`com.axtonliu.verbatimflow`) after packaging to keep macOS permission identity consistent.
 
 ## Flags
-- `--mode raw|format-only`
+ - `--mode raw|format-only|clarify`
+- `--engine apple|whisper`
+- `--whisper-model small|medium|large-v3`
+- `--whisper-compute-type int8|int8_float16|float16|float32`
 - `--hotkey ctrl+shift+space` (also supports modifier-only combos like `shift+option`, and aliases like `shift+alt`)
 - `--locale zh-Hans`
 - `--require-on-device`

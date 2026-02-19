@@ -41,6 +41,8 @@ cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-fl
 Native app launches as a menu bar item (`VF`) with controls for:
 - pause/resume hotkey listener
 - switching `Raw` / `Format-only` / `Clarify` mode
+- switching recognition engine (`Apple Speech` / `Whisper`)
+- switching Whisper model (`small` / `medium` / `large-v3`)
 - switching language (`System Default` / `zh-Hans` / `en-US`)
 - requesting microphone/speech permission
 - changing hotkey preset in-app
@@ -50,7 +52,7 @@ Native app launches as a menu bar item (`VF`) with controls for:
 - opening permission settings
 - opening local runtime logs
 
-`Mode`, `Hotkey`, and `Language` selections persist across restarts.
+`Mode`, `Recognition Engine`, `Whisper Model`, `Hotkey`, and `Language` selections persist across restarts.
 
 Build double-clickable app bundle:
 ```bash

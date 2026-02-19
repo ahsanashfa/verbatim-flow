@@ -3,6 +3,10 @@ import Foundation
 enum AppError: Error, CustomStringConvertible {
     case speechRecognizerUnavailable(String)
     case speechServiceUnavailable
+    case audioRecorderStartFailed
+    case whisperScriptNotFound
+    case pythonRuntimeNotFound
+    case whisperTranscriptionFailed(String)
     case eventSourceCreationFailed
     case eventCreationFailed
     case accessibilityPermissionRequired
@@ -13,6 +17,17 @@ enum AppError: Error, CustomStringConvertible {
             return "Speech recognizer is unavailable for locale: \(locale)"
         case .speechServiceUnavailable:
             return "Speech service is not available right now"
+        case .audioRecorderStartFailed:
+            return "Failed to start audio recorder"
+        case .whisperScriptNotFound:
+            return "Whisper script not found. Expected python/scripts/transcribe_once.py in the project."
+        case .pythonRuntimeNotFound:
+            return "Python runtime for Whisper is unavailable. Run python setup first."
+        case .whisperTranscriptionFailed(let details):
+            if details.isEmpty {
+                return "Whisper transcription failed"
+            }
+            return "Whisper transcription failed: \(details)"
         case .eventSourceCreationFailed:
             return "Failed to create event source"
         case .eventCreationFailed:

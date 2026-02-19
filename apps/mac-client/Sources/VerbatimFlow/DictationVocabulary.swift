@@ -12,6 +12,8 @@ enum DictationVocabulary {
         "Context",
         "Prompt",
         "Workflow",
+        "BROLL",
+        "B-roll",
         "iTerm2",
         "Terminal",
         "Git",

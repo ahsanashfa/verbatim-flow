@@ -22,6 +22,9 @@ final class AppController {
     private(set) var localeIdentifier: String
 
     private let requireOnDeviceRecognition: Bool
+    private var recognitionEngine: RecognitionEngine
+    private var whisperModel: WhisperModel
+    private let whisperComputeType: String
     private var transcriber: SpeechTranscriber
     private let injector = TextInjector()
     private var hotkey: Hotkey
@@ -46,12 +49,18 @@ final class AppController {
     init(config: CLIConfig) {
         self.localeIdentifier = config.localeIdentifier
         self.requireOnDeviceRecognition = config.requireOnDeviceRecognition
+        self.recognitionEngine = config.recognitionEngine
+        self.whisperModel = config.whisperModel
+        self.whisperComputeType = config.whisperComputeType
         self.hotkey = config.hotkey
         self.mode = config.mode
         self.dryRun = config.dryRun
         self.transcriber = SpeechTranscriber(
             localeIdentifier: config.localeIdentifier,
-            requireOnDeviceRecognition: config.requireOnDeviceRecognition
+            requireOnDeviceRecognition: config.requireOnDeviceRecognition,
+            recognitionEngine: config.recognitionEngine,
+            whisperModel: config.whisperModel,
+            whisperComputeType: config.whisperComputeType
         )
     }
 
@@ -71,6 +80,14 @@ final class AppController {
         localeIdentifier
     }
 
+    var currentRecognitionEngine: RecognitionEngine {
+        recognitionEngine
+    }
+
+    var currentWhisperModel: WhisperModel {
+        whisperModel
+    }
+
     var isRunning: Bool {
         hotkeyMonitor != nil
     }
@@ -81,7 +98,9 @@ final class AppController {
         }
 
         emit("verbatim-flow")
-        emit("mode=\(mode.rawValue) locale=\(localeIdentifier) hotkey=\(hotkey.display)")
+        emit(
+            "mode=\(mode.rawValue) engine=\(recognitionEngine.rawValue) whisper-model=\(whisperModel.rawValue) locale=\(localeIdentifier) hotkey=\(hotkey.display)"
+        )
         emit("release hotkey to transcribe and insert")
 
         let trusted = injector.promptAccessibilityIfNeeded()
@@ -172,7 +191,8 @@ final class AppController {
         return PermissionSnapshot(
             speech: mapSpeechStatus(speechStatus),
             microphone: microphoneState,
-            accessibilityTrusted: accessibilityTrusted
+            accessibilityTrusted: accessibilityTrusted,
+            speechRequired: recognitionEngine == .apple
         )
     }
 
@@ -212,11 +232,38 @@ final class AppController {
         }
 
         self.localeIdentifier = localeIdentifier
-        self.transcriber = SpeechTranscriber(
-            localeIdentifier: localeIdentifier,
-            requireOnDeviceRecognition: requireOnDeviceRecognition
-        )
+        rebuildTranscriber()
         emit("[config] language set to \(localeIdentifier)")
+    }
+
+    func setRecognitionEngine(_ engine: RecognitionEngine) {
+        guard recognitionEngine != engine else {
+            return
+        }
+
+        guard !isRecording else {
+            emit("[warn] stop recording before changing engine")
+            return
+        }
+
+        recognitionEngine = engine
+        rebuildTranscriber()
+        emit("[config] engine set to \(engine.rawValue)")
+    }
+
+    func setWhisperModel(_ model: WhisperModel) {
+        guard whisperModel != model else {
+            return
+        }
+
+        guard !isRecording else {
+            emit("[warn] stop recording before changing model")
+            return
+        }
+
+        whisperModel = model
+        rebuildTranscriber()
+        emit("[config] whisper model set to \(model.rawValue)")
     }
 
     func copyTranscriptToClipboard(_ text: String) {
@@ -259,7 +306,7 @@ final class AppController {
         if isRecording {
             isRecording = false
             Task { @MainActor in
-                _ = await transcriber.stopRecording()
+                _ = try? await transcriber.stopRecording()
             }
         }
 
@@ -319,7 +366,15 @@ final class AppController {
         isRecording = false
         runtimeState = .processing
 
-        let raw = await transcriber.stopRecording()
+        let raw: String
+        do {
+            raw = try await transcriber.stopRecording()
+        } catch {
+            pendingInsertTarget = nil
+            emit("[error] Failed to transcribe audio: \(error)")
+            runtimeState = .ready
+            return
+        }
         let guarded = TextGuard(mode: mode).apply(raw: raw)
         guard !guarded.text.isEmpty else {
             pendingInsertTarget = nil
@@ -391,6 +446,16 @@ final class AppController {
     private func emit(_ message: String) {
         RuntimeLogger.log(message)
         onLog?(message)
+    }
+
+    private func rebuildTranscriber() {
+        transcriber = SpeechTranscriber(
+            localeIdentifier: localeIdentifier,
+            requireOnDeviceRecognition: requireOnDeviceRecognition,
+            recognitionEngine: recognitionEngine,
+            whisperModel: whisperModel,
+            whisperComputeType: whisperComputeType
+        )
     }
 
     private func capturePendingInsertTarget() -> PendingInsertTarget? {

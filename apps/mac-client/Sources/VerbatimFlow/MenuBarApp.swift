@@ -43,7 +43,38 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         keyEquivalent: "c"
     )
 
+    private let engineMenuItem = NSMenuItem(title: "Recognition Engine", action: nil, keyEquivalent: "")
+    private lazy var engineAppleItem = NSMenuItem(
+        title: "Apple Speech",
+        action: #selector(setEngineApple),
+        keyEquivalent: ""
+    )
+    private lazy var engineWhisperItem = NSMenuItem(
+        title: "Whisper",
+        action: #selector(setEngineWhisper),
+        keyEquivalent: ""
+    )
+
+    private let whisperModelMenuItem = NSMenuItem(title: "Whisper Model", action: nil, keyEquivalent: "")
+    private lazy var whisperModelSmallItem = NSMenuItem(
+        title: "small",
+        action: #selector(setWhisperModelSmall),
+        keyEquivalent: ""
+    )
+    private lazy var whisperModelMediumItem = NSMenuItem(
+        title: "medium",
+        action: #selector(setWhisperModelMedium),
+        keyEquivalent: ""
+    )
+    private lazy var whisperModelLargeV3Item = NSMenuItem(
+        title: "large-v3",
+        action: #selector(setWhisperModelLargeV3),
+        keyEquivalent: ""
+    )
+
     private let hotkeyInfoItem: NSMenuItem
+    private let engineInfoItem: NSMenuItem
+    private let whisperModelInfoItem: NSMenuItem
     private let hotkeyMenuItem = NSMenuItem(title: "Hotkey", action: nil, keyEquivalent: "")
     private lazy var hotkeyCtrlShiftSpaceItem = NSMenuItem(
         title: "Ctrl+Shift+Space",
@@ -156,12 +187,17 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     init(config: CLIConfig) {
         let preferences = AppPreferences()
         let mode = MenuBarApp.resolveMode(config: config, preferences: preferences)
+        let recognitionEngine = MenuBarApp.resolveRecognitionEngine(config: config, preferences: preferences)
+        let whisperModel = MenuBarApp.resolveWhisperModel(config: config, preferences: preferences)
         let hotkey = MenuBarApp.resolveHotkey(config: config, preferences: preferences)
         let languageSelection = MenuBarApp.resolveLanguageSelection(config: config, preferences: preferences)
         let localeIdentifier = MenuBarApp.localeIdentifier(forSelection: languageSelection)
 
         self.config = CLIConfig(
             mode: mode,
+            recognitionEngine: recognitionEngine,
+            whisperModel: whisperModel,
+            whisperComputeType: config.whisperComputeType,
             localeIdentifier: localeIdentifier,
             hotkey: hotkey,
             requireOnDeviceRecognition: config.requireOnDeviceRecognition,
@@ -169,6 +205,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         )
         self.preferences = preferences
         self.languageSelection = languageSelection
+        self.engineInfoItem = NSMenuItem(title: "Engine: \(recognitionEngine.displayName)", action: nil, keyEquivalent: "")
+        self.whisperModelInfoItem = NSMenuItem(title: "Whisper Model: \(whisperModel.displayName)", action: nil, keyEquivalent: "")
         self.hotkeyInfoItem = NSMenuItem(title: "Hotkey: \(hotkey.display)", action: nil, keyEquivalent: "")
         self.languageInfoItem = NSMenuItem(title: "Language: \(localeIdentifier)", action: nil, keyEquivalent: "")
         super.init()
@@ -182,6 +220,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
         controller.start()
         refreshModeChecks()
+        refreshEngineChecks()
         refreshHotkeyChecks()
         refreshLanguageChecks()
         refreshRecentTranscriptMenu()
@@ -201,6 +240,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
     private func setupMenu() {
         stateMenuItem.isEnabled = false
+        engineInfoItem.isEnabled = false
+        whisperModelInfoItem.isEnabled = false
         hotkeyInfoItem.isEnabled = false
         languageInfoItem.isEnabled = false
         lastEventItem.isEnabled = false
@@ -217,6 +258,22 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         modeSubmenu.addItem(formatOnlyModeItem)
         modeSubmenu.addItem(clarifyModeItem)
         modeMenuItem.submenu = modeSubmenu
+
+        engineAppleItem.target = self
+        engineWhisperItem.target = self
+        let engineSubmenu = NSMenu(title: "Recognition Engine")
+        engineSubmenu.addItem(engineAppleItem)
+        engineSubmenu.addItem(engineWhisperItem)
+        engineMenuItem.submenu = engineSubmenu
+
+        whisperModelSmallItem.target = self
+        whisperModelMediumItem.target = self
+        whisperModelLargeV3Item.target = self
+        let whisperModelSubmenu = NSMenu(title: "Whisper Model")
+        whisperModelSubmenu.addItem(whisperModelSmallItem)
+        whisperModelSubmenu.addItem(whisperModelMediumItem)
+        whisperModelSubmenu.addItem(whisperModelLargeV3Item)
+        whisperModelMenuItem.submenu = whisperModelSubmenu
 
         hotkeyCtrlShiftSpaceItem.target = self
         hotkeyShiftOptionItem.target = self
@@ -258,8 +315,12 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
         menu.addItem(toggleMenuItem)
         menu.addItem(modeMenuItem)
+        menu.addItem(engineMenuItem)
+        menu.addItem(whisperModelMenuItem)
         menu.addItem(hotkeyMenuItem)
         menu.addItem(languageMenuItem)
+        menu.addItem(engineInfoItem)
+        menu.addItem(whisperModelInfoItem)
         menu.addItem(hotkeyInfoItem)
         menu.addItem(languageInfoItem)
         menu.addItem(NSMenuItem.separator())
@@ -325,6 +386,24 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         rawModeItem.state = controller.currentMode == .raw ? .on : .off
         formatOnlyModeItem.state = controller.currentMode == .formatOnly ? .on : .off
         clarifyModeItem.state = controller.currentMode == .clarify ? .on : .off
+    }
+
+    private func refreshEngineChecks() {
+        let currentEngine = controller.currentRecognitionEngine
+        let currentWhisperModel = controller.currentWhisperModel
+
+        engineInfoItem.title = "Engine: \(currentEngine.displayName)"
+        whisperModelInfoItem.title = "Whisper Model: \(currentWhisperModel.displayName)"
+
+        engineAppleItem.state = currentEngine == .apple ? .on : .off
+        engineWhisperItem.state = currentEngine == .whisper ? .on : .off
+
+        whisperModelSmallItem.state = currentWhisperModel == .small ? .on : .off
+        whisperModelMediumItem.state = currentWhisperModel == .medium ? .on : .off
+        whisperModelLargeV3Item.state = currentWhisperModel == .largeV3 ? .on : .off
+
+        whisperModelMenuItem.isEnabled = currentEngine == .whisper
+        whisperModelInfoItem.isHidden = currentEngine != .whisper
     }
 
     private func refreshHotkeyChecks() {
@@ -440,6 +519,43 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         controller.setMode(.clarify)
         preferences.saveMode(.clarify)
         refreshModeChecks()
+    }
+
+    @objc
+    private func setEngineApple() {
+        setRecognitionEngine(.apple)
+    }
+
+    @objc
+    private func setEngineWhisper() {
+        setRecognitionEngine(.whisper)
+    }
+
+    private func setRecognitionEngine(_ engine: RecognitionEngine) {
+        controller.setRecognitionEngine(engine)
+        preferences.saveRecognitionEngine(controller.currentRecognitionEngine)
+        refreshEngineChecks()
+    }
+
+    @objc
+    private func setWhisperModelSmall() {
+        setWhisperModel(.small)
+    }
+
+    @objc
+    private func setWhisperModelMedium() {
+        setWhisperModel(.medium)
+    }
+
+    @objc
+    private func setWhisperModelLargeV3() {
+        setWhisperModel(.largeV3)
+    }
+
+    private func setWhisperModel(_ model: WhisperModel) {
+        controller.setWhisperModel(model)
+        preferences.saveWhisperModel(controller.currentWhisperModel)
+        refreshEngineChecks()
     }
 
     @objc
@@ -650,6 +766,20 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
             return config.mode
         }
         return preferences.loadMode() ?? config.mode
+    }
+
+    private static func resolveRecognitionEngine(config: CLIConfig, preferences: AppPreferences) -> RecognitionEngine {
+        if hasCLIFlag("--engine") {
+            return config.recognitionEngine
+        }
+        return preferences.loadRecognitionEngine() ?? config.recognitionEngine
+    }
+
+    private static func resolveWhisperModel(config: CLIConfig, preferences: AppPreferences) -> WhisperModel {
+        if hasCLIFlag("--whisper-model") {
+            return config.whisperModel
+        }
+        return preferences.loadWhisperModel() ?? config.whisperModel
     }
 
     private static func resolveHotkey(config: CLIConfig, preferences: AppPreferences) -> Hotkey {

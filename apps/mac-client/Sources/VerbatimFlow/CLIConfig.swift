@@ -7,6 +7,37 @@ enum OutputMode: String {
     case clarify
 }
 
+enum RecognitionEngine: String {
+    case apple
+    case whisper
+
+    var displayName: String {
+        switch self {
+        case .apple:
+            return "Apple Speech"
+        case .whisper:
+            return "Whisper"
+        }
+    }
+}
+
+enum WhisperModel: String, CaseIterable {
+    case small
+    case medium
+    case largeV3 = "large-v3"
+
+    var displayName: String {
+        switch self {
+        case .small:
+            return "small"
+        case .medium:
+            return "medium"
+        case .largeV3:
+            return "large-v3"
+        }
+    }
+}
+
 struct Hotkey {
     let keyCode: UInt16?
     let modifiers: NSEvent.ModifierFlags
@@ -21,6 +52,9 @@ struct Hotkey {
 
 struct CLIConfig {
     let mode: OutputMode
+    let recognitionEngine: RecognitionEngine
+    let whisperModel: WhisperModel
+    let whisperComputeType: String
     let localeIdentifier: String
     let hotkey: Hotkey
     let requireOnDeviceRecognition: Bool
@@ -28,6 +62,9 @@ struct CLIConfig {
 
     static let `default` = CLIConfig(
         mode: .raw,
+        recognitionEngine: .apple,
+        whisperModel: .small,
+        whisperComputeType: "int8",
         localeIdentifier: Locale.current.identifier,
         hotkey: .default,
         requireOnDeviceRecognition: false,
@@ -49,6 +86,54 @@ struct CLIConfig {
                 }
                 config = CLIConfig(
                     mode: mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
+                    localeIdentifier: config.localeIdentifier,
+                    hotkey: config.hotkey,
+                    requireOnDeviceRecognition: config.requireOnDeviceRecognition,
+                    dryRun: config.dryRun
+                )
+            case "--engine":
+                index += 1
+                guard index < args.count, let engine = RecognitionEngine(rawValue: args[index]) else {
+                    throw ConfigError.invalidValue("--engine", "apple | whisper")
+                }
+                config = CLIConfig(
+                    mode: config.mode,
+                    recognitionEngine: engine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
+                    localeIdentifier: config.localeIdentifier,
+                    hotkey: config.hotkey,
+                    requireOnDeviceRecognition: config.requireOnDeviceRecognition,
+                    dryRun: config.dryRun
+                )
+            case "--whisper-model":
+                index += 1
+                guard index < args.count, let model = WhisperModel(rawValue: args[index]) else {
+                    throw ConfigError.invalidValue("--whisper-model", "small | medium | large-v3")
+                }
+                config = CLIConfig(
+                    mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: model,
+                    whisperComputeType: config.whisperComputeType,
+                    localeIdentifier: config.localeIdentifier,
+                    hotkey: config.hotkey,
+                    requireOnDeviceRecognition: config.requireOnDeviceRecognition,
+                    dryRun: config.dryRun
+                )
+            case "--whisper-compute-type":
+                index += 1
+                guard index < args.count else {
+                    throw ConfigError.missingValue("--whisper-compute-type")
+                }
+                config = CLIConfig(
+                    mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: args[index],
                     localeIdentifier: config.localeIdentifier,
                     hotkey: config.hotkey,
                     requireOnDeviceRecognition: config.requireOnDeviceRecognition,
@@ -61,6 +146,9 @@ struct CLIConfig {
                 }
                 config = CLIConfig(
                     mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
                     localeIdentifier: args[index],
                     hotkey: config.hotkey,
                     requireOnDeviceRecognition: config.requireOnDeviceRecognition,
@@ -74,6 +162,9 @@ struct CLIConfig {
                 let parsed = try HotkeyParser.parse(combo: args[index])
                 config = CLIConfig(
                     mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
                     localeIdentifier: config.localeIdentifier,
                     hotkey: parsed,
                     requireOnDeviceRecognition: config.requireOnDeviceRecognition,
@@ -82,6 +173,9 @@ struct CLIConfig {
             case "--require-on-device":
                 config = CLIConfig(
                     mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
                     localeIdentifier: config.localeIdentifier,
                     hotkey: config.hotkey,
                     requireOnDeviceRecognition: true,
@@ -90,6 +184,9 @@ struct CLIConfig {
             case "--dry-run":
                 config = CLIConfig(
                     mode: config.mode,
+                    recognitionEngine: config.recognitionEngine,
+                    whisperModel: config.whisperModel,
+                    whisperComputeType: config.whisperComputeType,
                     localeIdentifier: config.localeIdentifier,
                     hotkey: config.hotkey,
                     requireOnDeviceRecognition: config.requireOnDeviceRecognition,
@@ -130,10 +227,13 @@ enum HelpPrinter {
             "verbatim-flow",
             "",
             "Usage:",
-            "  verbatim-flow [--mode raw|format-only|clarify] [--locale <id>] [--hotkey ctrl+shift+space|shift+option] [--require-on-device] [--dry-run]",
+            "  verbatim-flow [--mode raw|format-only|clarify] [--engine apple|whisper] [--whisper-model small|medium|large-v3] [--whisper-compute-type int8|int8_float16|float16|float32] [--locale <id>] [--hotkey ctrl+shift+space|shift+option] [--require-on-device] [--dry-run]",
             "",
             "Defaults:",
             "  --mode raw",
+            "  --engine apple",
+            "  --whisper-model small",
+            "  --whisper-compute-type int8",
             "  --locale system locale",
             "  --hotkey ctrl+shift+space",
             ""

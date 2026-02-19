@@ -12,13 +12,16 @@ struct PermissionSnapshot {
     let speech: PermissionState
     let microphone: PermissionState
     let accessibilityTrusted: Bool
+    let speechRequired: Bool
 
     var summaryLine: String {
         let accessibility = accessibilityTrusted ? "Authorized" : "Denied"
-        return "Mic: \(microphone.rawValue) | Speech: \(speech.rawValue) | Accessibility: \(accessibility)"
+        let speechLabel = speechRequired ? speech.rawValue : "\(speech.rawValue) (Optional)"
+        return "Mic: \(microphone.rawValue) | Speech: \(speechLabel) | Accessibility: \(accessibility)"
     }
 
     var isReadyForHotkeyDictation: Bool {
-        speech == .authorized && microphone == .authorized && accessibilityTrusted
+        let speechReady = !speechRequired || speech == .authorized
+        return speechReady && microphone == .authorized && accessibilityTrusted
     }
 }
