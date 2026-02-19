@@ -72,7 +72,7 @@ struct CLIConfig {
     static let `default` = CLIConfig(
         mode: .raw,
         recognitionEngine: .apple,
-        whisperModel: .small,
+        whisperModel: .tiny,
         whisperComputeType: "int8",
         localeIdentifier: Locale.current.identifier,
         hotkey: .default,
@@ -241,7 +241,7 @@ enum HelpPrinter {
             "Defaults:",
             "  --mode raw",
             "  --engine apple",
-            "  --whisper-model small",
+            "  --whisper-model tiny",
             "  --whisper-compute-type int8",
             "  --locale system locale",
             "  --hotkey ctrl+shift+space",
