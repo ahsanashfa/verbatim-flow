@@ -35,7 +35,11 @@ enum TerminologyDictionary {
 Commit
 Token
 Workflow
+Release
 Comet => Commit
+walk flow => workflow
+work flow => workflow
+偷坑 => token
 """
 
     static func ensureDictionaryFileExists() {

@@ -8,13 +8,14 @@ struct MixedLanguageEnhancementResult {
 enum MixedLanguageEnhancer {
     private static let englishTokenRegex = try? NSRegularExpression(pattern: "[A-Za-z][A-Za-z\\-']*", options: [])
     private static let hanCharacterRegex = try? NSRegularExpression(pattern: "\\p{Han}", options: [])
+    private static let hanTokenRegex = try? NSRegularExpression(pattern: "[\\p{Han}]{2,6}", options: [])
 
     static func apply(text: String, localeIdentifier: String, vocabularyHints: [String]) -> MixedLanguageEnhancementResult {
         guard !text.isEmpty else {
             return MixedLanguageEnhancementResult(text: text, appliedRules: [])
         }
 
-        guard localeIdentifier.lowercased().hasPrefix("zh"), containsHanCharacter(text), containsEnglishToken(text) else {
+        guard localeIdentifier.lowercased().hasPrefix("zh"), containsHanCharacter(text) else {
             return MixedLanguageEnhancementResult(text: text, appliedRules: [])
         }
 
@@ -23,6 +24,37 @@ enum MixedLanguageEnhancer {
             return MixedLanguageEnhancementResult(text: text, appliedRules: [])
         }
 
+        var output = text
+        var appliedRules: [String] = []
+
+        if containsEnglishToken(text) {
+            let englishCorrections = applyEnglishTokenCorrections(text: output, candidates: canonicalTerms)
+            output = englishCorrections.text
+            appliedRules.append(contentsOf: englishCorrections.appliedRules)
+        }
+
+        let hanCorrections = applyHanTokenCorrections(text: output, candidates: canonicalTerms)
+        output = hanCorrections.text
+        appliedRules.append(contentsOf: hanCorrections.appliedRules)
+
+        return MixedLanguageEnhancementResult(text: output, appliedRules: appliedRules)
+    }
+
+    private static func containsHanCharacter(_ text: String) -> Bool {
+        guard let regex = hanCharacterRegex else { return false }
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        return regex.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    private static func containsEnglishToken(_ text: String) -> Bool {
+        guard let regex = englishTokenRegex else { return false }
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        return regex.firstMatch(in: text, options: [], range: range) != nil
+    }
+
+    private static func applyEnglishTokenCorrections(text: String, candidates: [String: String]) -> MixedLanguageEnhancementResult {
         guard let regex = englishTokenRegex else {
             return MixedLanguageEnhancementResult(text: text, appliedRules: [])
         }
@@ -44,11 +76,11 @@ enum MixedLanguageEnhancer {
             let token = String(output[tokenRange])
             let normalized = token.lowercased()
 
-            guard canonicalTerms[normalized] == nil else {
+            guard candidates[normalized] == nil else {
                 continue
             }
 
-            guard let candidate = bestCandidate(for: normalized, candidates: canonicalTerms) else {
+            guard let candidate = bestCandidate(for: normalized, candidates: candidates) else {
                 continue
             }
 
@@ -60,18 +92,42 @@ enum MixedLanguageEnhancer {
         return MixedLanguageEnhancementResult(text: output, appliedRules: appliedRules.reversed())
     }
 
-    private static func containsHanCharacter(_ text: String) -> Bool {
-        guard let regex = hanCharacterRegex else { return false }
-        let nsText = text as NSString
-        let range = NSRange(location: 0, length: nsText.length)
-        return regex.firstMatch(in: text, options: [], range: range) != nil
-    }
+    private static func applyHanTokenCorrections(text: String, candidates: [String: String]) -> MixedLanguageEnhancementResult {
+        guard let regex = hanTokenRegex else {
+            return MixedLanguageEnhancementResult(text: text, appliedRules: [])
+        }
 
-    private static func containsEnglishToken(_ text: String) -> Bool {
-        guard let regex = englishTokenRegex else { return false }
         let nsText = text as NSString
-        let range = NSRange(location: 0, length: nsText.length)
-        return regex.firstMatch(in: text, options: [], range: range) != nil
+        let matches = regex.matches(in: text, options: [], range: NSRange(location: 0, length: nsText.length))
+        guard !matches.isEmpty else {
+            return MixedLanguageEnhancementResult(text: text, appliedRules: [])
+        }
+
+        var output = text
+        var appliedRules: [String] = []
+
+        let phoneticTerms = normalizedPhoneticTerms(from: candidates)
+        guard !phoneticTerms.isEmpty else {
+            return MixedLanguageEnhancementResult(text: text, appliedRules: [])
+        }
+
+        for match in matches.reversed() {
+            guard match.range.location != NSNotFound else { continue }
+            let range = Range(match.range, in: output)
+            guard let tokenRange = range else { continue }
+            let token = String(output[tokenRange])
+            let latin = latinSkeleton(for: token)
+            guard latin.count >= 4 else { continue }
+
+            guard let candidate = bestPhoneticCandidate(for: latin, candidates: phoneticTerms) else {
+                continue
+            }
+
+            output.replaceSubrange(tokenRange, with: candidate)
+            appliedRules.append("\(token) -> \(candidate)")
+        }
+
+        return MixedLanguageEnhancementResult(text: output, appliedRules: appliedRules.reversed())
     }
 
     private static func normalizedCanonicalTerms(from rawHints: [String]) -> [String: String] {
@@ -89,6 +145,19 @@ enum MixedLanguageEnhancer {
             }
 
             table[trimmed.lowercased()] = trimmed
+        }
+        return table
+    }
+
+    private static func normalizedPhoneticTerms(from candidates: [String: String]) -> [String: String] {
+        var table: [String: String] = [:]
+        for (_, original) in candidates {
+            let normalized = original.lowercased()
+            let lettersOnly = normalized.replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+            guard lettersOnly.count >= 4 else {
+                continue
+            }
+            table[lettersOnly] = original
         }
         return table
     }
@@ -132,7 +201,50 @@ enum MixedLanguageEnhancer {
         return 3
     }
 
+    private static func maxPhoneticDistance(for length: Int) -> Int {
+        if length <= 5 {
+            return 2
+        }
+        if length <= 8 {
+            return 3
+        }
+        return 4
+    }
+
+    private static func bestPhoneticCandidate(for tokenLatin: String, candidates: [String: String]) -> String? {
+        var best: (term: String, distance: Int)?
+
+        for (normalized, original) in candidates {
+            guard normalized.first == tokenLatin.first else {
+                continue
+            }
+
+            if abs(normalized.count - tokenLatin.count) > 5 {
+                continue
+            }
+
+            let distance = levenshtein(tokenLatin, normalized)
+            if distance > maxPhoneticDistance(for: normalized.count) {
+                continue
+            }
+
+            if let currentBest = best {
+                if distance < currentBest.distance {
+                    best = (original, distance)
+                }
+            } else {
+                best = (original, distance)
+            }
+        }
+
+        return best?.term
+    }
+
     private static func adaptCase(reference: String, candidate: String) -> String {
+        if reference.rangeOfCharacter(from: CharacterSet.letters) == nil {
+            return candidate
+        }
+
         if reference.uppercased() == reference {
             return candidate.uppercased()
         }
@@ -144,6 +256,18 @@ enum MixedLanguageEnhancer {
         }
 
         return candidate.lowercased()
+    }
+
+    private static func latinSkeleton(for text: String) -> String {
+        let mutable = NSMutableString(string: text) as CFMutableString
+        let toLatin = CFStringTransform(mutable, nil, kCFStringTransformToLatin, false)
+        if toLatin {
+            _ = CFStringTransform(mutable, nil, kCFStringTransformStripCombiningMarks, false)
+        }
+
+        return (mutable as String)
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
     }
 
     private static func levenshtein(_ lhs: String, _ rhs: String) -> Int {

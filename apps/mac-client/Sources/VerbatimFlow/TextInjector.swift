@@ -37,12 +37,19 @@ final class TextInjector {
         if let preferredTarget {
             focusPreferredTargetIfNeeded(preferredTarget)
         }
-        if let frontmost = NSWorkspace.shared.frontmostApplication {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        if let frontmost {
             RuntimeLogger.log(
                 "[insert] frontmost pid=\(frontmost.processIdentifier) bundle=\(frontmost.bundleIdentifier ?? "-") name=\(frontmost.localizedName ?? "-")"
             )
         } else {
             RuntimeLogger.log("[insert] frontmost application unavailable before insertion")
+        }
+
+        if isTerminalLike(frontmost?.bundleIdentifier) {
+            try postUnicodeText(text)
+            RuntimeLogger.log("[insert] via unicode typing (terminal path)")
+            return
         }
 
         if tryInsertViaAccessibility(text: text) {
@@ -114,6 +121,33 @@ final class TextInjector {
         keyUp.post(tap: .cghidEventTap)
     }
 
+    private func postUnicodeText(_ text: String) throws {
+        guard let source = CGEventSource(stateID: .hidSystemState) else {
+            throw AppError.eventSourceCreationFailed
+        }
+
+        for character in text {
+            let chunk = String(character)
+            let utf16 = Array(chunk.utf16)
+
+            guard
+                let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true),
+                let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            else {
+                throw AppError.eventCreationFailed
+            }
+
+            utf16.withUnsafeBufferPointer { buffer in
+                guard let baseAddress = buffer.baseAddress else { return }
+                keyDown.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+                keyUp.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+            }
+
+            keyDown.post(tap: .cghidEventTap)
+            keyUp.post(tap: .cghidEventTap)
+        }
+    }
+
     private func tryInsertViaAccessibility(text: String) -> Bool {
         let systemWide = AXUIElementCreateSystemWide()
         var focusedValue: CFTypeRef?
@@ -167,5 +201,13 @@ final class TextInjector {
 
         let finalPid = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? -1
         RuntimeLogger.log("[insert] target app not frontmost after activation wait currentPid=\(finalPid)")
+    }
+
+    private func isTerminalLike(_ bundleIdentifier: String?) -> Bool {
+        guard let bundleIdentifier else {
+            return false
+        }
+
+        return bundleIdentifier == "com.apple.Terminal" || bundleIdentifier == "com.googlecode.iterm2"
     }
 }
