@@ -14,17 +14,29 @@ A fast, zero-rewrite dictation app for macOS — your words, exactly as spoken.
   <img src="assets/bento-features.png" alt="VerbatimFlow Feature Overview" width="720">
 </p>
 
+## Why I Built This
+
+I tried every major dictation app on macOS. They all share the same problems:
+
+- **They rewrite your words.** You say one thing, and the tool "helpfully" rephrases it. You lose trust in your own input.
+- **The hotkey gets stuck.** You release the key, but the app keeps recording. You have to press again — or restart.
+- **They answer instead of typing.** AI-powered dictation tools sometimes treat your speech as a question and respond to it, instead of just typing what you said.
+- **Your audio goes through a black box.** Closed-source, no visibility into what's sent where.
+
+VerbatimFlow exists because I wanted a dictation tool I could actually trust: one that types what I say, releases when I release, never "helps" without asking, and runs on code I can read.
+
 ## What It Does
 
-VerbatimFlow is a menu bar dictation utility that transcribes speech and injects text directly into any focused app. Unlike tools that silently rewrite your words, VerbatimFlow preserves your original phrasing by default.
+VerbatimFlow is a menu bar dictation utility that transcribes speech and injects text directly into any focused app.
 
-**Core Principle:** Raw transcription first. Formatting is opt-in and constrained.
+**Core Principle:** Raw transcription first. Cleanup is opt-in and constrained.
 
 - **Push-to-talk** — hold a hotkey to record, release to transcribe and inject
-- **Three modes** — `Raw` (verbatim output), `Format-only` (punctuation/spacing cleanup with diff guard), `Clarify` (LLM-powered concise rewrite)
+- **Two modes** — `Standard` (verbatim output with rule-based formatting: punctuation, spacing, capitalization) and `Clarify` (LLM-powered concise rewrite, opt-in)
 - **Multiple engines** — Apple Speech, local Whisper, OpenAI Cloud
 - **Instant injection** — text appears in your active app via Accessibility API
 - **Undo support** — one-click rollback of the last inserted transcript
+- **Open source** — every line of code is readable; your audio, your control
 
 ## Status
 
@@ -92,7 +104,7 @@ See [`apps/mac-client/python/README.md`](apps/mac-client/python/README.md) for d
 1. **Launch** — double-click `VerbatimFlow.app` or run `./scripts/run-native-mac-client.sh`
 2. **Grant permissions** — Microphone, Accessibility, and Speech Recognition (prompted on first launch, or use menu shortcuts)
 3. **Hold hotkey** — default `Ctrl+Shift+Space` to record; release to transcribe and inject
-4. **Switch modes** — use the Settings menu to toggle between Raw, Format-only, and Clarify
+4. **Switch modes** — use the Settings menu to toggle between Standard and Clarify
 5. **Force Clarify** — press `Cmd+Shift+Space` to use Clarify mode for one segment regardless of default
 
 ### Hotkey Presets
