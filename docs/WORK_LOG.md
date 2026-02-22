@@ -242,3 +242,23 @@
   - Added About submenu in menu bar app with links:
     - Homepage, Agent Skills resource/origin pages, YouTube, X
   - Removed misleading menu key-equivalent hints for non-global actions (`Pause Hotkey`, `Mode` items), keeping behavior explicit.
+
+### Todo 3 follow-up (open-source blocker fixes from external review)
+- User request:
+  - Start fixing high-priority findings from external Claude review and re-run review checks.
+- Implemented (high-priority):
+  - Security transport:
+    - Replaced `curl` subprocess usage for OpenAI transcription and clarify rewrite with `URLSession` HTTP requests.
+    - Removes API key exposure risk in process list (`ps`) for cloud requests.
+  - Secret file permission hardening:
+    - `openai.env` creation/maintenance now enforces `0600`, directory `0700`.
+  - Privacy logging:
+    - `[inserted]` and `[dry-run]` logs now store `chars + short preview`, no full transcript dump.
+  - Hotkey lifecycle safety:
+    - Carbon callback userData now retains/releases monitor instance explicitly to avoid potential use-after-free.
+  - Open-source hygiene:
+    - Removed hardcoded absolute local paths from docs and scripts.
+    - Bundle ID is now configurable via `VERBATIMFLOW_BUNDLE_ID` (default `com.verbatimflow.app`).
+    - `CLAUDE.md` removed from git tracking and ignored for public repo.
+  - UX polish:
+    - Reworked About entry into a single native About window with embedded resource links (instead of many menu items).

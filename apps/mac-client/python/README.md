@@ -15,7 +15,7 @@
 
 ## Quickstart
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/python"
+cd apps/mac-client/python
 ./scripts/setup_env.sh
 ./scripts/run.sh --mode raw --model small
 ```

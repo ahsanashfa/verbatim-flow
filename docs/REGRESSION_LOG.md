@@ -146,6 +146,20 @@
   - UI shortcut hints should never conflict with actual global dictation hotkeys.
   - Installer generation should be one-command and reproducible from repo root.
 
+## 2026-02-22: High-priority security/privacy hardening
+
+- Fixed:
+  - OpenAI cloud transcription and clarify rewrite no longer invoke `curl` subprocess with bearer token in command args.
+  - `openai.env` now enforced to secure permissions (`0600`) and support directory to `0700`.
+  - Insert/dry-run logs no longer persist full transcript text.
+  - Carbon hotkey handler retains/releases monitor instance explicitly to avoid lifecycle risk.
+  - Bundle identifier is configurable and defaults to `com.verbatimflow.app`.
+  - Absolute local filesystem paths removed from public docs.
+- Verification:
+  - `swift test` passes.
+  - Native app builds and launches with new bundle identifier.
+  - Installer DMG still generated successfully.
+
 ## Manual regression checklist (before release)
 
 - Permissions:

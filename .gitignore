@@ -2,6 +2,7 @@ node_modules
 .DS_Store
 .env
 .env.*
+CLAUDE.md
 dist
 build
 coverage

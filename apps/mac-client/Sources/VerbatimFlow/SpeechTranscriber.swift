@@ -426,53 +426,43 @@ final class SpeechTranscriber {
             environment: env,
             fileValues: fileValues
         )
-        let usesTLS = endpoint.lowercased().hasPrefix("https://")
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-
-        var arguments: [String] = [
-            "-sS",
-            "--connect-timeout", "15",
-            "--max-time", "180",
-        ]
-
-        if usesTLS {
-            arguments.append(contentsOf: ["--proto", "=https", "--tlsv1.2"])
+        guard let endpointURL = URL(string: endpoint) else {
+            throw AppError.openAITranscriptionFailed("Invalid endpoint: \(endpoint)")
         }
 
-        arguments.append(contentsOf: [
-            "-X", "POST",
-            endpoint,
-            "-H", "Authorization: Bearer \(apiKey)",
-            "-F", "file=@\(audioURL.path)",
-            "-F", "model=\(resolvedModel)",
-            "-F", "response_format=json"
-        ])
+        let boundary = "Boundary-\(UUID().uuidString)"
+        let audioData = try Data(contentsOf: audioURL)
 
+        var body = Data()
+        appendMultipartField(name: "model", value: resolvedModel, boundary: boundary, to: &body)
+        appendMultipartField(name: "response_format", value: "json", boundary: boundary, to: &body)
         if let languageCode, !languageCode.isEmpty {
-            arguments.append(contentsOf: ["-F", "language=\(languageCode)"])
+            appendMultipartField(name: "language", value: languageCode, boundary: boundary, to: &body)
         }
+        appendMultipartFile(
+            name: "file",
+            filename: audioURL.lastPathComponent,
+            mimeType: "audio/m4a",
+            fileData: audioData,
+            boundary: boundary,
+            to: &body
+        )
+        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
 
-        process.arguments = arguments
+        var request = URLRequest(url: endpointURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 180
+        request.httpBody = body
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-
-        try process.run()
-        process.waitUntilExit()
-
-        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorText = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if process.terminationStatus != 0 {
-            let details = errorText.isEmpty
-                ? (String(data: outputData, encoding: .utf8) ?? "")
-                : errorText
-            throw AppError.openAITranscriptionFailed(details)
+        let (outputData, statusCode) = try performRequest(request, timeout: 180)
+        if !(200...299).contains(statusCode) {
+            let message = parseErrorMessage(from: outputData)
+            throw AppError.openAITranscriptionFailed(
+                message.isEmpty ? "HTTP \(statusCode)" : message
+            )
         }
 
         guard
@@ -557,6 +547,81 @@ final class SpeechTranscriber {
         default:
             return false
         }
+    }
+
+    private nonisolated static func performRequest(_ request: URLRequest, timeout: TimeInterval) throws -> (Data, Int) {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout
+        let session = URLSession(configuration: config)
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData: Data?
+        var responseCode: Int?
+        var responseError: Error?
+
+        let task = session.dataTask(with: request) { data, response, error in
+            responseData = data
+            responseCode = (response as? HTTPURLResponse)?.statusCode
+            responseError = error
+            semaphore.signal()
+        }
+        task.resume()
+
+        let waitResult = semaphore.wait(timeout: .now() + timeout + 1)
+        session.invalidateAndCancel()
+
+        if waitResult == .timedOut {
+            task.cancel()
+            throw AppError.openAITranscriptionFailed("Request timed out after \(Int(timeout))s")
+        }
+
+        if let responseError {
+            throw AppError.openAITranscriptionFailed(responseError.localizedDescription)
+        }
+
+        guard let responseCode else {
+            throw AppError.openAITranscriptionFailed("No HTTP response")
+        }
+
+        return (responseData ?? Data(), responseCode)
+    }
+
+    private nonisolated static func appendMultipartField(
+        name: String,
+        value: String,
+        boundary: String,
+        to body: inout Data
+    ) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(value)\r\n".data(using: .utf8)!)
+    }
+
+    private nonisolated static func appendMultipartFile(
+        name: String,
+        filename: String,
+        mimeType: String,
+        fileData: Data,
+        boundary: String,
+        to body: inout Data
+    ) {
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n".data(using: .utf8)!)
+    }
+
+    private nonisolated static func parseErrorMessage(from payload: Data) -> String {
+        if let parsed = try? JSONSerialization.jsonObject(with: payload, options: []) as? [String: Any],
+           let errorPayload = parsed["error"] as? [String: Any],
+           let message = errorPayload["message"] as? String {
+            return message.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(data: payload, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     private nonisolated static func resolveWhisperScriptURL() -> URL? {

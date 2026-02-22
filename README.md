@@ -20,22 +20,20 @@ A fast dictation input app prototype for macOS.
 
 ## Current runnable path
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/python"
+cd apps/mac-client/python
 ./scripts/setup_env.sh
 ./scripts/run.sh --mode raw --model small
 ```
 
-See `/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/python/README.md` for permissions and troubleshooting.
+See `apps/mac-client/python/README.md` for permissions and troubleshooting.
 
 Or run from project root:
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/run-mac-client.sh --mode raw --model small
 ```
 
 Native AppCore run:
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/run-native-mac-client.sh --mode raw --hotkey ctrl+shift+space
 ```
 
@@ -67,29 +65,25 @@ Native app launches as a menu bar item (`VF`) with most controls grouped under `
 
 Build double-clickable app bundle:
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/build-native-app.sh
-open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/dist/VerbatimFlow.app"
+open "apps/mac-client/dist/VerbatimFlow.app"
 ```
 
 Build installable DMG (drag-and-drop to Applications):
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/build-installer-dmg.sh
-open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/dist/VerbatimFlow-installer.dmg"
+open "apps/mac-client/dist/VerbatimFlow-installer.dmg"
 ```
 
-The build script signs with a stable designated requirement (`identifier "com.axtonliu.verbatimflow"`), so Accessibility/Input Monitoring permissions do not invalidate on each rebuild.
+The build script signs with a stable designated requirement (`identifier "$VERBATIMFLOW_BUNDLE_ID"`; default `com.verbatimflow.app`), so Accessibility/Input Monitoring permissions do not invalidate on each rebuild.
 
 Restart native app (kills stale processes first):
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/restart-native-app.sh
 ```
 
 Collect permission diagnostics (tccd + signature + app runtime log):
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/collect-permission-diagnostics.sh 30
 ```
 

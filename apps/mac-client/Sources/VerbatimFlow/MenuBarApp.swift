@@ -18,7 +18,11 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
-    private let aboutMenuItem = NSMenuItem(title: "About", action: nil, keyEquivalent: "")
+    private lazy var aboutMenuItem = NSMenuItem(
+        title: "About VerbatimFlow",
+        action: #selector(openAboutPanel),
+        keyEquivalent: ""
+    )
     private let settingsMenuItem = NSMenuItem(title: "Settings", action: nil, keyEquivalent: "")
 
     private let stateMenuItem = NSMenuItem(title: "State: Starting", action: nil, keyEquivalent: "")
@@ -37,37 +41,6 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     private lazy var clarifyModeItem = NSMenuItem(
         title: "Clarify",
         action: #selector(setClarifyMode),
-        keyEquivalent: ""
-    )
-
-    private lazy var aboutAppItem = NSMenuItem(
-        title: "About VerbatimFlow",
-        action: #selector(openAboutPanel),
-        keyEquivalent: ""
-    )
-    private lazy var openHomepageItem = NSMenuItem(
-        title: "Axton Homepage",
-        action: #selector(openAxtonHomepage),
-        keyEquivalent: ""
-    )
-    private lazy var openAgentSkillsLibraryItem = NSMenuItem(
-        title: "Agent Skills Resource Library",
-        action: #selector(openAgentSkillsLibrary),
-        keyEquivalent: ""
-    )
-    private lazy var openAgentSkillsOriginItem = NSMenuItem(
-        title: "Agent Skills Origin Guide",
-        action: #selector(openAgentSkillsOriginGuide),
-        keyEquivalent: ""
-    )
-    private lazy var openYouTubeItem = NSMenuItem(
-        title: "Axton YouTube",
-        action: #selector(openAxtonYouTube),
-        keyEquivalent: ""
-    )
-    private lazy var openXItem = NSMenuItem(
-        title: "Axton X / Twitter",
-        action: #selector(openAxtonX),
         keyEquivalent: ""
     )
 
@@ -246,6 +219,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     private var shouldShowPermissionAlertOnNextSnapshot = false
     private var permissionRequestFallbackWorkItem: DispatchWorkItem?
     private var shouldRestoreAccessoryAfterPermissionRequest = false
+    private var aboutWindowController: NSWindowController?
     private let transcriptDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss"
@@ -396,22 +370,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         openLogsItem.target = self
         openTerminologyItem.target = self
         openOpenAISettingsItem.target = self
-        aboutAppItem.target = self
-        openHomepageItem.target = self
-        openAgentSkillsLibraryItem.target = self
-        openAgentSkillsOriginItem.target = self
-        openYouTubeItem.target = self
-        openXItem.target = self
-
-        let aboutSubmenu = NSMenu(title: "About")
-        aboutSubmenu.addItem(aboutAppItem)
-        aboutSubmenu.addItem(NSMenuItem.separator())
-        aboutSubmenu.addItem(openHomepageItem)
-        aboutSubmenu.addItem(openAgentSkillsLibraryItem)
-        aboutSubmenu.addItem(openAgentSkillsOriginItem)
-        aboutSubmenu.addItem(openYouTubeItem)
-        aboutSubmenu.addItem(openXItem)
-        aboutMenuItem.submenu = aboutSubmenu
+        aboutMenuItem.target = self
 
         let settingsSubmenu = NSMenu(title: "Settings")
         settingsSubmenu.addItem(modeMenuItem)
@@ -894,7 +853,16 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
     @objc
     private func openAboutPanel() {
-        NSApp.orderFrontStandardAboutPanel(nil)
+        if aboutWindowController == nil {
+            aboutWindowController = makeAboutWindowController()
+        }
+
+        guard let window = aboutWindowController?.window else {
+            return
+        }
+
+        window.center()
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -921,6 +889,78 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     @objc
     private func openAxtonX() {
         openExternalURL("https://twitter.com/axtonliu")
+    }
+
+    private func makeAboutWindowController() -> NSWindowController {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 540, height: 420),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "About VerbatimFlow"
+        window.isReleasedWhenClosed = false
+        window.minSize = NSSize(width: 520, height: 380)
+
+        let rootView = NSView()
+        rootView.translatesAutoresizingMaskIntoConstraints = false
+        window.contentView = rootView
+
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 10
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        rootView.addSubview(stack)
+
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: rootView.leadingAnchor, constant: 22),
+            stack.trailingAnchor.constraint(equalTo: rootView.trailingAnchor, constant: -22),
+            stack.topAnchor.constraint(equalTo: rootView.topAnchor, constant: 20)
+        ])
+
+        let titleLabel = NSTextField(labelWithString: "VerbatimFlow")
+        titleLabel.font = NSFont.systemFont(ofSize: 24, weight: .semibold)
+        stack.addArrangedSubview(titleLabel)
+
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        let versionLabel = NSTextField(labelWithString: "Version \(version) (\(build))")
+        versionLabel.textColor = .secondaryLabelColor
+        stack.addArrangedSubview(versionLabel)
+
+        let descriptionLabel = NSTextField(
+            wrappingLabelWithString: "Fast dictation input for macOS. Hold hotkey to record, release to transcribe and insert."
+        )
+        descriptionLabel.maximumNumberOfLines = 0
+        descriptionLabel.preferredMaxLayoutWidth = 480
+        stack.addArrangedSubview(descriptionLabel)
+
+        let linksHeader = NSTextField(labelWithString: "Resources")
+        linksHeader.font = NSFont.systemFont(ofSize: 14, weight: .medium)
+        stack.addArrangedSubview(linksHeader)
+
+        stack.addArrangedSubview(makeAboutLinkButton(title: "Axton Homepage", action: #selector(openAxtonHomepage)))
+        stack.addArrangedSubview(makeAboutLinkButton(title: "Agent Skills Resource Library", action: #selector(openAgentSkillsLibrary)))
+        stack.addArrangedSubview(makeAboutLinkButton(title: "Agent Skills Origin Guide", action: #selector(openAgentSkillsOriginGuide)))
+        stack.addArrangedSubview(makeAboutLinkButton(title: "Axton YouTube", action: #selector(openAxtonYouTube)))
+        stack.addArrangedSubview(makeAboutLinkButton(title: "Axton X / Twitter", action: #selector(openAxtonX)))
+
+        let footer = NSTextField(labelWithString: "© VerbatimFlow. Experimental release.")
+        footer.textColor = .tertiaryLabelColor
+        stack.addArrangedSubview(footer)
+
+        return NSWindowController(window: window)
+    }
+
+    private func makeAboutLinkButton(title: String, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.setButtonType(.momentaryPushIn)
+        button.isBordered = false
+        button.font = NSFont.systemFont(ofSize: 13, weight: .regular)
+        button.contentTintColor = .linkColor
+        button.alignment = .left
+        return button
     }
 
     private func openExternalURL(_ rawURL: String) {

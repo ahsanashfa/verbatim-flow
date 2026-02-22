@@ -42,11 +42,22 @@ VERBATIMFLOW_OPENAI_BASE_URL=https://api.openai.com/v1
 
     static func ensureConfigFileExists() {
         do {
-            try FileManager.default.createDirectory(at: applicationSupportDirectory, withIntermediateDirectories: true)
-            guard !FileManager.default.fileExists(atPath: fileURL.path) else {
-                return
+            try FileManager.default.createDirectory(
+                at: applicationSupportDirectory,
+                withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            if !FileManager.default.fileExists(atPath: fileURL.path) {
+                let created = FileManager.default.createFile(
+                    atPath: fileURL.path,
+                    contents: Data(defaultTemplate.utf8),
+                    attributes: [.posixPermissions: 0o600]
+                )
+                if !created {
+                    RuntimeLogger.log("[openai-settings] failed to create config file at \(fileURL.path)")
+                }
             }
-            try defaultTemplate.write(to: fileURL, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
         } catch {
             RuntimeLogger.log("[openai-settings] failed to ensure config file: \(error)")
         }

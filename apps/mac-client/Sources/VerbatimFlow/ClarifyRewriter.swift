@@ -25,7 +25,6 @@ enum ClarifyRewriter {
         let env = ProcessInfo.processInfo.environment
         let fileValues = OpenAISettings.loadValues()
         let transport = try resolvedClarifyTransport(environment: env, fileValues: fileValues)
-        let usesTLS = transport.endpoint.lowercased().hasPrefix("https://")
 
         let systemPrompt = """
 You are VerbatimFlow Clarify mode.
@@ -51,55 +50,33 @@ Rules:
             payload["provider"] = ["sort": providerSort]
         }
         let payloadData = try JSONSerialization.data(withJSONObject: payload, options: [])
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
-
-        var arguments: [String] = [
-            "-sS",
-            "--connect-timeout", "10",
-            "--max-time", "60"
-        ]
-        if usesTLS {
-            arguments.append(contentsOf: ["--proto", "=https", "--tlsv1.2"])
-        }
-        arguments.append(contentsOf: [
-            "-X", "POST",
-            transport.endpoint
-        ])
-
-        let headers = [
-            "Authorization: Bearer \(transport.apiKey)",
-            "Content-Type: application/json"
-        ] + transport.extraHeaders
-        for header in headers {
-            arguments.append(contentsOf: ["-H", header])
+        guard let endpointURL = URL(string: transport.endpoint) else {
+            throw AppError.openAIClarifyFailed("Invalid clarify endpoint: \(transport.endpoint)")
         }
 
-        arguments.append(contentsOf: ["--data-binary", "@-"])
-        process.arguments = arguments
+        var request = URLRequest(url: endpointURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        request.httpBody = payloadData
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(transport.apiKey)", forHTTPHeaderField: "Authorization")
+        for header in transport.extraHeaders {
+            let parts = header.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            let name = String(parts[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !name.isEmpty, !value.isEmpty {
+                request.setValue(value, forHTTPHeaderField: name)
+            }
+        }
 
-        let outputPipe = Pipe()
-        let errorPipe = Pipe()
-        let inputPipe = Pipe()
-        process.standardOutput = outputPipe
-        process.standardError = errorPipe
-        process.standardInput = inputPipe
-
-        try process.run()
-        inputPipe.fileHandleForWriting.write(payloadData)
-        inputPipe.fileHandleForWriting.closeFile()
-        process.waitUntilExit()
-
-        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-        let errorText = String(data: errorPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        if process.terminationStatus != 0 {
-            let details = errorText.isEmpty
-                ? (String(data: outputData, encoding: .utf8) ?? "")
-                : errorText
-            throw AppError.openAIClarifyFailed(details)
+        let (outputData, statusCode) = try performRequest(request, timeout: 60)
+        if !(200...299).contains(statusCode) {
+            let details = parseErrorMessage(from: outputData)
+            throw AppError.openAIClarifyFailed(
+                details.isEmpty ? "HTTP \(statusCode)" : details
+            )
         }
 
         guard
@@ -290,6 +267,55 @@ Rules:
         default:
             return false
         }
+    }
+
+    private static func performRequest(_ request: URLRequest, timeout: TimeInterval) throws -> (Data, Int) {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout
+        let session = URLSession(configuration: config)
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var responseData: Data?
+        var responseCode: Int?
+        var responseError: Error?
+
+        let task = session.dataTask(with: request) { data, response, error in
+            responseData = data
+            responseCode = (response as? HTTPURLResponse)?.statusCode
+            responseError = error
+            semaphore.signal()
+        }
+        task.resume()
+
+        let waitResult = semaphore.wait(timeout: .now() + timeout + 1)
+        session.invalidateAndCancel()
+
+        if waitResult == .timedOut {
+            task.cancel()
+            throw AppError.openAIClarifyFailed("Request timed out after \(Int(timeout))s")
+        }
+
+        if let responseError {
+            throw AppError.openAIClarifyFailed(responseError.localizedDescription)
+        }
+
+        guard let responseCode else {
+            throw AppError.openAIClarifyFailed("No HTTP response")
+        }
+
+        return (responseData ?? Data(), responseCode)
+    }
+
+    private static func parseErrorMessage(from payload: Data) -> String {
+        if let parsed = try? JSONSerialization.jsonObject(with: payload, options: []) as? [String: Any],
+           let errorPayload = parsed["error"] as? [String: Any],
+           let message = errorPayload["message"] as? String {
+            return message.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        return String(data: payload, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
     private static func resolvedChatCompletionsEndpoint(rawBaseURL: String, allowInsecure: Bool) throws -> String {

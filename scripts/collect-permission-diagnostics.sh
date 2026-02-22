@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_BUNDLE="$ROOT_DIR/apps/mac-client/dist/VerbatimFlow.app"
 INFO_PLIST="$APP_BUNDLE/Contents/Info.plist"
 RUNTIME_LOG="$HOME/Library/Logs/VerbatimFlow/runtime.log"
+BUNDLE_ID="${VERBATIMFLOW_BUNDLE_ID:-com.verbatimflow.app}"
 
 MINUTES="${1:-30}"
 if ! [[ "$MINUTES" =~ ^[0-9]+$ ]]; then
@@ -16,6 +17,10 @@ OUT_DIR="$ROOT_DIR/tmp/diagnostics"
 mkdir -p "$OUT_DIR"
 STAMP="$(date +"%Y%m%d-%H%M%S")"
 OUT_FILE="$OUT_DIR/permission-diagnostics-$STAMP.log"
+
+if [[ -f "$INFO_PLIST" ]]; then
+  BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INFO_PLIST" 2>/dev/null || echo "$BUNDLE_ID")"
+fi
 
 {
   echo "# VerbatimFlow permission diagnostics"
@@ -53,7 +58,7 @@ OUT_FILE="$OUT_DIR/permission-diagnostics-$STAMP.log"
   echo
 
   echo "## tccd logs (last ${MINUTES}m)"
-  /usr/bin/log show --style compact --info --debug --last "${MINUTES}m" --predicate 'process == "tccd" AND (eventMessage CONTAINS[c] "com.axtonliu.verbatimflow" OR eventMessage CONTAINS[c] "VerbatimFlow")' | tail -n 500 || true
+  /usr/bin/log show --style compact --info --debug --last "${MINUTES}m" --predicate "process == \"tccd\" AND (eventMessage CONTAINS[c] \"$BUNDLE_ID\" OR eventMessage CONTAINS[c] \"VerbatimFlow\")" | tail -n 500 || true
   echo
 
   echo "## app runtime log tail"

@@ -4,7 +4,7 @@ macOS desktop shell for microphone control, hotkeys, and pipeline orchestration.
 
 ## Run Native AppCore
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client"
+cd apps/mac-client
 swift run verbatim-flow --mode raw --hotkey ctrl+shift+space
 ```
 
@@ -46,12 +46,11 @@ swift test
 
 ## Build app bundle
 ```bash
-cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow"
 ./scripts/build-native-app.sh
-open "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/dist/VerbatimFlow.app"
+open "apps/mac-client/dist/VerbatimFlow.app"
 ```
 
-`build-native-app.sh` now applies a fixed ad-hoc signature (`com.axtonliu.verbatimflow`) after packaging to keep macOS permission identity consistent.
+`build-native-app.sh` applies a fixed ad-hoc signature (`$VERBATIMFLOW_BUNDLE_ID`, default `com.verbatimflow.app`) after packaging to keep macOS permission identity consistent.
 
 ## Flags
 - `--mode raw|format-only|clarify`

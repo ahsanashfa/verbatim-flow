@@ -1,7 +1,7 @@
 import Foundation
 
 enum RuntimeLogger {
-    private static let queue = DispatchQueue(label: "com.axtonliu.verbatimflow.runtime-logger", qos: .utility)
+    private static let queue = DispatchQueue(label: "com.verbatimflow.runtime-logger", qos: .utility)
     private static let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -583,14 +583,14 @@ final class AppController {
         }
 
         if dryRun {
-            emit("[dry-run] \(finalText)")
+            emit("[dry-run] chars=\(finalText.count) preview=\"\(Self.logPreview(finalText))\"")
             return
         }
 
         do {
             try injector.insert(text: finalText, preferredTarget: injectorTarget(from: preferredTarget))
             lastSuccessfulInsertTarget = preferredTarget ?? capturePendingInsertTarget()
-            emit("[inserted] \(finalText)")
+            emit("[inserted] chars=\(finalText.count) preview=\"\(Self.logPreview(finalText))\"")
         } catch {
             if let appError = error as? AppError, case .accessibilityPermissionRequired = appError {
                 emit("[error] Accessibility permission missing/stale. Re-enable VerbatimFlow in Privacy & Security > Accessibility.")
@@ -831,5 +831,13 @@ final class AppController {
 
     private static func normalizeDefaultMode(_ mode: OutputMode) -> OutputMode {
         mode == .raw ? .formatOnly : mode
+    }
+
+    private static func logPreview(_ text: String, limit: Int = 24) -> String {
+        let singleLine = text.replacingOccurrences(of: "\n", with: " ")
+        if singleLine.count <= limit {
+            return singleLine
+        }
+        return String(singleLine.prefix(limit)) + "…"
     }
 }

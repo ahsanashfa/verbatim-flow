@@ -16,10 +16,10 @@
 - Keep ASR backend swappable (local model or cloud API).
 
 ## Current runtime path
-- `/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client/python`
+- `apps/mac-client/python`
 
 ## Native path status
-- Swift native shell exists as an experiment under `/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-flow/apps/mac-client`.
+- Swift native shell exists as an experiment under `apps/mac-client`.
 - Current machine has SDK/compiler mismatch that blocks Swift build, so Python path is used for active iteration.
 
 ## Interfaces (draft)

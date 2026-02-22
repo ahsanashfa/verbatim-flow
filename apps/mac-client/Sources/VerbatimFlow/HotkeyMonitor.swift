@@ -14,6 +14,7 @@ final class HotkeyMonitor {
     private var flagsChangedMonitor: Any?
     private var eventHandlerRef: EventHandlerRef?
     private var hotKeyRef: EventHotKeyRef?
+    private var retainedSelfForCarbonHandler: Unmanaged<HotkeyMonitor>?
     private let hotKeyID = EventHotKeyID(signature: OSType(0x56464B59), id: 1) // "VFKY"
     private var isPressed = false
     private var releaseWatchdog: DispatchSourceTimer?
@@ -124,7 +125,10 @@ final class HotkeyMonitor {
             EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: OSType(kEventHotKeyReleased))
         ]
 
-        let userData = UnsafeMutableRawPointer(Unmanaged.passUnretained(self).toOpaque())
+        if retainedSelfForCarbonHandler == nil {
+            retainedSelfForCarbonHandler = Unmanaged.passRetained(self)
+        }
+        let userData = UnsafeMutableRawPointer(retainedSelfForCarbonHandler!.toOpaque())
         let installStatus = InstallEventHandler(
             GetEventDispatcherTarget(),
             Self.hotKeyEventHandler,
@@ -135,6 +139,7 @@ final class HotkeyMonitor {
         )
         guard installStatus == noErr else {
             RuntimeLogger.log("[hotkey-monitor] InstallEventHandler failed status=\(installStatus)")
+            releaseRetainedCarbonHandlerIfNeeded()
             return false
         }
 
@@ -166,6 +171,12 @@ final class HotkeyMonitor {
             RemoveEventHandler(eventHandlerRef)
             self.eventHandlerRef = nil
         }
+        releaseRetainedCarbonHandlerIfNeeded()
+    }
+
+    private func releaseRetainedCarbonHandlerIfNeeded() {
+        retainedSelfForCarbonHandler?.release()
+        retainedSelfForCarbonHandler = nil
     }
 
     private func handleCarbonEvent(_ eventRef: EventRef) -> OSStatus {

@@ -7,6 +7,7 @@ APP_NAME="VerbatimFlow"
 APP_BUNDLE="$NATIVE_DIR/dist/${APP_NAME}.app"
 EXECUTABLE_NAME="$APP_NAME"
 ICON_FILE="$NATIVE_DIR/Resources/AppIcon.icns"
+BUNDLE_ID="${VERBATIMFLOW_BUNDLE_ID:-com.verbatimflow.app}"
 
 cd "$NATIVE_DIR"
 
@@ -24,7 +25,7 @@ if [[ -f "$ICON_FILE" ]]; then
   cp "$ICON_FILE" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 fi
 
-cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
+cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -38,7 +39,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << 'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleIdentifier</key>
-  <string>com.axtonliu.verbatimflow</string>
+  <string>${BUNDLE_ID}</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
@@ -68,8 +69,8 @@ codesign \
   --force \
   --deep \
   --sign - \
-  --identifier "com.axtonliu.verbatimflow" \
-  --requirements '=designated => identifier "com.axtonliu.verbatimflow"' \
+  --identifier "$BUNDLE_ID" \
+  --requirements "=designated => identifier \"$BUNDLE_ID\"" \
   "$APP_BUNDLE"
 
 echo "[info] signature requirement:"
