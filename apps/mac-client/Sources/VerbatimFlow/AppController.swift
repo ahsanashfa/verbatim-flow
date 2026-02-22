@@ -500,8 +500,22 @@ final class AppController {
     }
 
     private func commitTranscript(_ raw: String, preferredTarget: PendingInsertTarget?) {
-        let guarded = TextGuard(mode: mode).apply(raw: raw)
+        let commandParsed = OneShotVoiceCommandParser.parse(raw: raw, defaultMode: mode)
+        if let matchedCommand = commandParsed.matchedCommand {
+            if commandParsed.effectiveMode == mode {
+                emit("[voice-command] detected '\(matchedCommand)' for current segment")
+            } else {
+                emit(
+                    "[voice-command] override current segment mode: \(mode.rawValue) -> \(commandParsed.effectiveMode.rawValue) (\(matchedCommand))"
+                )
+            }
+        }
+
+        let guarded = TextGuard(mode: commandParsed.effectiveMode).apply(raw: commandParsed.content)
         guard !guarded.text.isEmpty else {
+            if commandParsed.matchedCommand != nil {
+                emit("[voice-command] command detected but no content after command")
+            }
             emit("[skip] Empty transcript")
             return
         }

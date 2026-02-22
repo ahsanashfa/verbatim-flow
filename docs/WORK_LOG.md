@@ -133,7 +133,7 @@
   - Keep last recording for retry when transcription fails.
   - Add `Retry last audio` action.
   - Add failed-audio persistence path and clear policy.
-- [ ] Todo 2 (P1): One-shot voice commands
+- [x] Todo 2 (P1): One-shot voice commands
   - Support command phrases like "把以上内容整理成书面语" for current utterance only.
   - Keep global mode unchanged unless explicitly switched.
 - [ ] Todo 3 (P2): Readability polish
@@ -161,6 +161,24 @@
 - Clear policy:
   - Overwrite previous failed audio when a new failure happens.
   - Automatically clear failed audio + metadata after successful retry.
+- Verification:
+  - Automated gate passed (`swift test`).
+  - Manual smoke pending user-side interactive validation.
+
+### Todo 2 implementation note
+- Added parser:
+  - `apps/mac-client/Sources/VerbatimFlow/OneShotVoiceCommandParser.swift`
+- Integration:
+  - `AppController.commitTranscript` now parses one-shot command prefix first.
+  - Command applies to current segment only and never mutates global mode.
+  - If command is spoken without body content, app skips insertion and logs a hint.
+- Initial command set:
+  - Format-only: `整理成书面语` / `改成书面语` / `转成书面语` ...
+  - Clarify: `润色一下` / `整理一下` / `优化一下` ...
+  - Raw: `原样输出` / `保持原样` / `不要润色` / `raw mode`
+- Tests:
+  - `apps/mac-client/Tests/VerbatimFlowTests/OneShotVoiceCommandParserTests.swift`
+  - `swift test` passed.
 - Verification:
   - Automated gate passed (`swift test`).
   - Manual smoke pending user-side interactive validation.

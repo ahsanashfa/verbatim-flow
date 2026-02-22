@@ -77,6 +77,22 @@
 - Guardrail:
   - Hotkey monitor must only transition to `pressed` after consumer explicitly accepts the press.
 
+## 2026-02-21: One-shot voice command should not mutate global mode
+
+- Feature:
+  - Segment-level command prefixes (e.g. `整理成书面语 ...`) can override post-processing mode for current utterance.
+- Guardrail:
+  - Command override applies to current segment only.
+  - Menu-selected global mode remains unchanged.
+  - Command phrase itself must not be inserted into target editor.
+- Validation:
+  - Unit tests added for:
+    - no-command passthrough
+    - format-only override
+    - clarify override
+    - command-only without body
+    - non-prefix phrase non-trigger
+
 ## Manual regression checklist (before release)
 
 - Permissions:
