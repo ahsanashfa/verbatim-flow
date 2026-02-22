@@ -207,6 +207,7 @@ verbatim-flow/
 - [ ] Configurable text guard sensitivity threshold
 - [ ] Per-app mode profiles
 - [ ] Improved mixed-language (CJK + English) handling
+- [ ] Clarify structural formatting (e.g., detect action items and render as bullet lists while preserving meaning)
 
 ## Contributing
 
