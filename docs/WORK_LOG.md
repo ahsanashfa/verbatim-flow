@@ -182,3 +182,16 @@
 - Verification:
   - Automated gate passed (`swift test`).
   - Manual smoke pending user-side interactive validation.
+
+### Todo 2 follow-up (interaction refinement)
+- User feedback:
+  - Voice command prefixes are error-prone in long free dictation (possible false trigger or missed trigger).
+- Product decision:
+  - Keep parser implementation for future optional use, but disable voice-prefix execution in runtime by default.
+  - Switch to dual-hotkey interaction as the primary mode selector:
+    - Primary hotkey: current default mode
+    - Secondary hotkey (`cmd+shift+space`): force `clarify` for current segment only
+  - Merge `raw` into `format-only` baseline for menu/UI path (`Standard (Raw+Format)`).
+- Result:
+  - Reduced accidental command behavior in natural speech.
+  - Mode selection becomes deterministic at key-down time.

@@ -28,13 +28,8 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     )
 
     private let modeMenuItem = NSMenuItem(title: "Mode", action: nil, keyEquivalent: "")
-    private lazy var rawModeItem = NSMenuItem(
-        title: "Raw",
-        action: #selector(setRawMode),
-        keyEquivalent: "r"
-    )
     private lazy var formatOnlyModeItem = NSMenuItem(
-        title: "Format-only",
+        title: "Standard (Raw+Format)",
         action: #selector(setFormatOnlyMode),
         keyEquivalent: "f"
     )
@@ -101,6 +96,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     )
 
     private let hotkeyInfoItem: NSMenuItem
+    private let clarifyHotkeyInfoItem: NSMenuItem
     private let engineInfoItem: NSMenuItem
     private let whisperModelInfoItem: NSMenuItem
     private let openAIModelInfoItem: NSMenuItem
@@ -251,6 +247,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         self.whisperModelInfoItem = NSMenuItem(title: "Whisper Model: \(whisperModel.displayName)", action: nil, keyEquivalent: "")
         self.openAIModelInfoItem = NSMenuItem(title: "OpenAI Model: \(openAIModel.displayName)", action: nil, keyEquivalent: "")
         self.hotkeyInfoItem = NSMenuItem(title: "Hotkey: \(hotkey.display)", action: nil, keyEquivalent: "")
+        self.clarifyHotkeyInfoItem = NSMenuItem(title: "Clarify Hotkey: Cmd+Shift+Space", action: nil, keyEquivalent: "")
         self.languageInfoItem = NSMenuItem(title: "Language: \(localeIdentifier)", action: nil, keyEquivalent: "")
         super.init()
     }
@@ -290,18 +287,17 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         whisperModelInfoItem.isEnabled = false
         openAIModelInfoItem.isEnabled = false
         hotkeyInfoItem.isEnabled = false
+        clarifyHotkeyInfoItem.isEnabled = false
         languageInfoItem.isEnabled = false
         lastEventItem.isEnabled = false
         permissionStatusItem.isEnabled = false
 
         toggleMenuItem.target = self
 
-        rawModeItem.target = self
         formatOnlyModeItem.target = self
         clarifyModeItem.target = self
 
         let modeSubmenu = NSMenu(title: "Mode")
-        modeSubmenu.addItem(rawModeItem)
         modeSubmenu.addItem(formatOnlyModeItem)
         modeSubmenu.addItem(clarifyModeItem)
         modeMenuItem.submenu = modeSubmenu
@@ -381,6 +377,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
         settingsSubmenu.addItem(whisperModelInfoItem)
         settingsSubmenu.addItem(openAIModelInfoItem)
         settingsSubmenu.addItem(hotkeyInfoItem)
+        settingsSubmenu.addItem(clarifyHotkeyInfoItem)
         settingsSubmenu.addItem(languageInfoItem)
         settingsSubmenu.addItem(NSMenuItem.separator())
         settingsSubmenu.addItem(requestPermissionsItem)
@@ -476,7 +473,6 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     }
 
     private func refreshModeChecks() {
-        rawModeItem.state = controller.currentMode == .raw ? .on : .off
         formatOnlyModeItem.state = controller.currentMode == .formatOnly ? .on : .off
         clarifyModeItem.state = controller.currentMode == .clarify ? .on : .off
     }
@@ -510,6 +506,7 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
 
     private func refreshHotkeyChecks() {
         hotkeyInfoItem.title = "Hotkey: \(controller.currentHotkeyDisplay)"
+        clarifyHotkeyInfoItem.title = "Clarify Hotkey: \(controller.currentClarifyHotkeyDisplay)"
         hotkeyCtrlShiftSpaceItem.state = isCurrentHotkey("ctrl+shift+space") ? .on : .off
         hotkeyShiftOptionItem.state = isCurrentHotkey("shift+option") ? .on : .off
         hotkeyCmdShiftSpaceItem.state = isCurrentHotkey("cmd+shift+space") ? .on : .off
@@ -602,13 +599,6 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
             return
         }
         controller.start()
-    }
-
-    @objc
-    private func setRawMode() {
-        controller.setMode(.raw)
-        preferences.saveMode(.raw)
-        refreshModeChecks()
     }
 
     @objc
@@ -908,10 +898,13 @@ final class MenuBarApp: NSObject, NSApplicationDelegate {
     }
 
     private static func resolveMode(config: CLIConfig, preferences: AppPreferences) -> OutputMode {
-        if hasCLIFlag("--mode") {
-            return config.mode
+        let normalize: (OutputMode) -> OutputMode = { mode in
+            mode == .raw ? .formatOnly : mode
         }
-        return preferences.loadMode() ?? config.mode
+        if hasCLIFlag("--mode") {
+            return normalize(config.mode)
+        }
+        return normalize(preferences.loadMode() ?? config.mode)
     }
 
     private static func resolveRecognitionEngine(config: CLIConfig, preferences: AppPreferences) -> RecognitionEngine {

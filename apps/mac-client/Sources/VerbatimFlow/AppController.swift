@@ -29,18 +29,29 @@ final class AppController {
     private var transcriber: SpeechTranscriber
     private let injector = TextInjector()
     private var hotkey: Hotkey
+    private let clarifyHotkey: Hotkey
     private let dryRun: Bool
 
     private var mode: OutputMode
-    private var hotkeyMonitor: HotkeyMonitor?
+    private var primaryHotkeyMonitor: HotkeyMonitor?
+    private var clarifyHotkeyMonitor: HotkeyMonitor?
+    private var pendingSegmentModeOverride: OutputMode?
     private var isRecording = false
     private var pendingInsertTarget: PendingInsertTarget?
     private var lastSuccessfulInsertTarget: PendingInsertTarget?
+    private let enableVoiceCommandPrefixes = false
     private(set) var runtimeState: RuntimeState = .stopped {
         didSet {
             onStateChanged?(runtimeState)
         }
     }
+
+    private static let defaultClarifyHotkey: Hotkey = (try? HotkeyParser.parse(combo: "cmd+shift+space"))
+        ?? Hotkey(
+            keyCode: 49,
+            modifiers: [.command, .shift],
+            display: "cmd+shift+space"
+        )
 
     var onStateChanged: ((RuntimeState) -> Void)?
     var onLog: ((String) -> Void)?
@@ -56,7 +67,8 @@ final class AppController {
         self.openAIModel = config.openAIModel
         self.whisperComputeType = config.whisperComputeType
         self.hotkey = config.hotkey
-        self.mode = config.mode
+        self.clarifyHotkey = Self.defaultClarifyHotkey
+        self.mode = Self.normalizeDefaultMode(config.mode)
         self.dryRun = config.dryRun
         self.transcriber = SpeechTranscriber(
             localeIdentifier: config.localeIdentifier,
@@ -74,6 +86,10 @@ final class AppController {
 
     var currentHotkeyDisplay: String {
         hotkey.display
+    }
+
+    var currentClarifyHotkeyDisplay: String {
+        clarifyHotkey.display
     }
 
     var currentHotkey: Hotkey {
@@ -97,7 +113,7 @@ final class AppController {
     }
 
     var isRunning: Bool {
-        hotkeyMonitor != nil
+        primaryHotkeyMonitor != nil
     }
 
     var hasRetriableAudio: Bool {
@@ -109,7 +125,7 @@ final class AppController {
     }
 
     func start() {
-        guard hotkeyMonitor == nil else {
+        guard primaryHotkeyMonitor == nil else {
             return
         }
 
@@ -118,6 +134,8 @@ final class AppController {
             "mode=\(mode.rawValue) engine=\(recognitionEngine.rawValue) whisper-model=\(whisperModel.rawValue) openai-model=\(openAIModel.rawValue) locale=\(localeIdentifier) hotkey=\(hotkey.display)"
         )
         emit("release hotkey to transcribe and insert")
+        emit("[hotkey] primary=\(hotkey.display) default-mode=\(mode.rawValue)")
+        emit("[hotkey] secondary=\(clarifyHotkey.display) segment-mode=clarify")
 
         let trusted = injector.promptAccessibilityIfNeeded()
         if !trusted {
@@ -125,50 +143,24 @@ final class AppController {
             emit("[hint] Grant permission in System Settings > Privacy & Security > Accessibility.")
         }
 
-        hotkeyMonitor = HotkeyMonitor(
+        primaryHotkeyMonitor = makeHotkeyMonitor(
             hotkey: hotkey,
-            onPressed: { [weak self] in
-                RuntimeLogger.log("[hotkey-bridge] onPressed callback fired")
-                guard let self else {
-                    RuntimeLogger.log("[hotkey-bridge] onPressed callback dropped: self released")
-                    return false
-                }
-
-                guard Thread.isMainThread else {
-                    RuntimeLogger.log("[hotkey-bridge] onPressed callback dropped: not on main thread")
-                    return false
-                }
-
-                let accepted = MainActor.assumeIsolated {
-                    self.shouldAcceptHotkeyPress()
-                }
-                guard accepted else {
-                    RuntimeLogger.log("[hotkey-bridge] onPressed callback rejected by state gate")
-                    return false
-                }
-
-                Task { @MainActor in
-                    RuntimeLogger.log("[hotkey-bridge] onPressed task entered")
-                    await self.handleHotkeyPressed()
-                    RuntimeLogger.log("[hotkey-bridge] onPressed task finished")
-                }
-                return true
-            },
-            onReleased: { [weak self] in
-                RuntimeLogger.log("[hotkey-bridge] onReleased callback fired")
-                guard let self else {
-                    RuntimeLogger.log("[hotkey-bridge] onReleased callback dropped: self released")
-                    return
-                }
-                Task { @MainActor in
-                    RuntimeLogger.log("[hotkey-bridge] onReleased task entered")
-                    await self.handleHotkeyReleased()
-                    RuntimeLogger.log("[hotkey-bridge] onReleased task finished")
-                }
-            }
+            segmentMode: mode,
+            monitorLabel: "primary"
         )
+        primaryHotkeyMonitor?.start()
 
-        hotkeyMonitor?.start()
+        if hotkey.keyCode == clarifyHotkey.keyCode, hotkey.modifiers == clarifyHotkey.modifiers {
+            emit("[warn] clarify hotkey conflicts with primary; secondary clarify hotkey disabled")
+            clarifyHotkeyMonitor = nil
+        } else {
+            clarifyHotkeyMonitor = makeHotkeyMonitor(
+                hotkey: clarifyHotkey,
+                segmentMode: .clarify,
+                monitorLabel: "clarify"
+            )
+            clarifyHotkeyMonitor?.start()
+        }
         runtimeState = .ready
         emit("[ready] Waiting for hotkey: \(hotkey.display)")
         notifyRetriableAudioAvailabilityChanged()
@@ -230,8 +222,12 @@ final class AppController {
     }
 
     func setMode(_ mode: OutputMode) {
-        self.mode = mode
-        emit("[config] mode set to \(mode.rawValue)")
+        let normalized = Self.normalizeDefaultMode(mode)
+        self.mode = normalized
+        emit("[config] mode set to \(normalized.rawValue)")
+        if mode == .raw {
+            emit("[config] raw merged into format-only baseline")
+        }
     }
 
     func setHotkey(_ hotkey: Hotkey) {
@@ -386,7 +382,9 @@ final class AppController {
     }
 
     private func stopInternal(emitLog: Bool) {
-        hotkeyMonitor = nil
+        primaryHotkeyMonitor = nil
+        clarifyHotkeyMonitor = nil
+        pendingSegmentModeOverride = nil
 
         if isRecording {
             isRecording = false
@@ -401,17 +399,17 @@ final class AppController {
         }
     }
 
-    private func shouldAcceptHotkeyPress() -> Bool {
+    private func shouldAcceptHotkeyPress(segmentMode: OutputMode, monitorLabel: String) -> Bool {
         guard runtimeState != .stopped else {
-            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) because runtimeState=stopped")
+            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) monitor=\(monitorLabel) because runtimeState=stopped")
             return false
         }
         guard runtimeState == .ready else {
-            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) because runtimeState=\(runtimeState)")
+            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) monitor=\(monitorLabel) mode=\(segmentMode.rawValue) because runtimeState=\(runtimeState)")
             return false
         }
         guard !isRecording else {
-            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) because isRecording=true")
+            RuntimeLogger.log("[hotkey-handler] ignored pressed (bridge gate) monitor=\(monitorLabel) because isRecording=true")
             return false
         }
         return true
@@ -438,6 +436,7 @@ final class AppController {
         let permissionsGranted = await transcriber.ensurePermissions()
         guard permissionsGranted else {
             pendingInsertTarget = nil
+            pendingSegmentModeOverride = nil
             emit("[error] Speech/Microphone permission denied.")
             onPermissionSnapshot?(currentPermissionSnapshot())
             return
@@ -450,6 +449,7 @@ final class AppController {
             emit("[recording] Speak now...")
         } catch {
             pendingInsertTarget = nil
+            pendingSegmentModeOverride = nil
             emit("[error] Failed to start recording: \(error)")
             runtimeState = .ready
         }
@@ -480,12 +480,14 @@ final class AppController {
             }
             notifyRetriableAudioAvailabilityChanged()
             pendingInsertTarget = nil
+            pendingSegmentModeOverride = nil
             emit("[error] Failed to transcribe audio: \(error)")
             runtimeState = .ready
             return
         }
         commitTranscript(raw, preferredTarget: pendingInsertTarget)
         pendingInsertTarget = nil
+        pendingSegmentModeOverride = nil
         runtimeState = .ready
         notifyRetriableAudioAvailabilityChanged()
     }
@@ -500,7 +502,21 @@ final class AppController {
     }
 
     private func commitTranscript(_ raw: String, preferredTarget: PendingInsertTarget?) {
-        let commandParsed = OneShotVoiceCommandParser.parse(raw: raw, defaultMode: mode)
+        let defaultSegmentMode = pendingSegmentModeOverride ?? mode
+        if let override = pendingSegmentModeOverride, override != mode {
+            emit("[segment-mode] current segment uses \(override.rawValue) via secondary hotkey")
+        }
+
+        let commandParsed: OneShotVoiceCommandResult
+        if enableVoiceCommandPrefixes {
+            commandParsed = OneShotVoiceCommandParser.parse(raw: raw, defaultMode: defaultSegmentMode)
+        } else {
+            commandParsed = OneShotVoiceCommandResult(
+                effectiveMode: defaultSegmentMode,
+                content: raw.trimmingCharacters(in: .whitespacesAndNewlines),
+                matchedCommand: nil
+            )
+        }
         if let matchedCommand = commandParsed.matchedCommand {
             if commandParsed.effectiveMode == mode {
                 emit("[voice-command] detected '\(matchedCommand)' for current segment")
@@ -741,5 +757,62 @@ final class AppController {
         @unknown default:
             return false
         }
+    }
+
+    private func makeHotkeyMonitor(
+        hotkey: Hotkey,
+        segmentMode: OutputMode,
+        monitorLabel: String
+    ) -> HotkeyMonitor {
+        HotkeyMonitor(
+            hotkey: hotkey,
+            onPressed: { [weak self] in
+                RuntimeLogger.log("[hotkey-bridge] onPressed callback fired monitor=\(monitorLabel)")
+                guard let self else {
+                    RuntimeLogger.log("[hotkey-bridge] onPressed callback dropped: self released monitor=\(monitorLabel)")
+                    return false
+                }
+
+                guard Thread.isMainThread else {
+                    RuntimeLogger.log("[hotkey-bridge] onPressed callback dropped: not on main thread monitor=\(monitorLabel)")
+                    return false
+                }
+
+                let accepted = MainActor.assumeIsolated {
+                    self.shouldAcceptHotkeyPress(segmentMode: segmentMode, monitorLabel: monitorLabel)
+                }
+                guard accepted else {
+                    RuntimeLogger.log("[hotkey-bridge] onPressed callback rejected by state gate monitor=\(monitorLabel)")
+                    return false
+                }
+
+                MainActor.assumeIsolated {
+                    self.pendingSegmentModeOverride = segmentMode
+                }
+
+                Task { @MainActor in
+                    RuntimeLogger.log("[hotkey-bridge] onPressed task entered monitor=\(monitorLabel)")
+                    await self.handleHotkeyPressed()
+                    RuntimeLogger.log("[hotkey-bridge] onPressed task finished monitor=\(monitorLabel)")
+                }
+                return true
+            },
+            onReleased: { [weak self] in
+                RuntimeLogger.log("[hotkey-bridge] onReleased callback fired monitor=\(monitorLabel)")
+                guard let self else {
+                    RuntimeLogger.log("[hotkey-bridge] onReleased callback dropped: self released monitor=\(monitorLabel)")
+                    return
+                }
+                Task { @MainActor in
+                    RuntimeLogger.log("[hotkey-bridge] onReleased task entered monitor=\(monitorLabel)")
+                    await self.handleHotkeyReleased()
+                    RuntimeLogger.log("[hotkey-bridge] onReleased task finished monitor=\(monitorLabel)")
+                }
+            }
+        )
+    }
+
+    private static func normalizeDefaultMode(_ mode: OutputMode) -> OutputMode {
+        mode == .raw ? .formatOnly : mode
     }
 }

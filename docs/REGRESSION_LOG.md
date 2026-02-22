@@ -93,6 +93,19 @@
     - command-only without body
     - non-prefix phrase non-trigger
 
+## 2026-02-22: Prefer hotkey-based segment mode over spoken commands
+
+- User feedback:
+  - Spoken command prefixes are not reliable enough in long natural dictation and can be perceived as inaccurate.
+- Decision:
+  - Runtime defaults to hotkey-driven segment mode selection.
+  - Primary hotkey uses default mode.
+  - Secondary hotkey (`cmd+shift+space`) forces `clarify` for current segment.
+  - Spoken command parser kept in codebase but disabled by default to avoid accidental trigger paths.
+- Guardrail:
+  - Segment mode should be determined at key-down whenever possible.
+  - Avoid command-word dependency in free dictation path.
+
 ## Manual regression checklist (before release)
 
 - Permissions:

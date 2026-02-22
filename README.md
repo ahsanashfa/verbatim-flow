@@ -40,8 +40,10 @@ cd "/Users/axton/Documents/DailyWork🌴/Project Files/Code Projects/verbatim-fl
 
 Native app launches as a menu bar item (`VF`) with most controls grouped under `Settings`:
 - pause/resume hotkey listener
-- switching `Raw` / `Format-only` / `Clarify` mode
-- one-shot voice command prefixes for current segment only (e.g. `整理成书面语 ...`, `润色一下 ...`, `原样输出 ...`)
+- switching `Standard (Raw+Format)` / `Clarify` mode
+- dual hotkey segment trigger:
+  - primary hotkey uses current default mode
+  - secondary hotkey (`Cmd+Shift+Space`) forces `Clarify` for current segment only
 - switching recognition engine (`Apple Speech` / `Whisper` / `OpenAI Cloud`)
 - switching Whisper model (`tiny` / `base` / `small` / `medium` / `large-v3`)
 - switching OpenAI model (`gpt-4o-mini-transcribe` / `whisper-1`)
