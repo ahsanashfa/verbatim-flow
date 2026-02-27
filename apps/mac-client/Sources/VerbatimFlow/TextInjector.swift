@@ -214,7 +214,10 @@ final class TextInjector {
             return false
         }
 
-        return bundleIdentifier == "com.apple.Terminal" || bundleIdentifier == "com.googlecode.iterm2"
+        return bundleIdentifier == "com.apple.Terminal"
+            || bundleIdentifier == "com.googlecode.iterm2"
+            || bundleIdentifier == "com.mitchellh.ghostty"
+            || bundleIdentifier.hasSuffix(".ghostty")
     }
 
     private func shouldUseUnicodeTyping(_ bundleIdentifier: String?) -> Bool {
